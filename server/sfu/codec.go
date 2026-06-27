@@ -69,8 +69,15 @@ func msgType(method, class uint16) uint16 {
 func methodOf(t uint16) uint16 { return (t & 0x000F) | ((t & 0x00E0) >> 1) | ((t & 0x3E00) >> 2) }
 func classOf(t uint16) uint16  { return ((t & 0x0010) >> 4) | ((t & 0x0100) >> 7) }
 
-// IsSTUN: bits 0-1 são 00 (não confundir com DTLS, RTP, ChannelData).
-func IsSTUN(b []byte) bool { return len(b) >= 20 && b[0]&0xC0 == 0 }
+// IsSTUN: bits 0-1 são 00 E magic cookie 0x2112A442 nos bytes 4-7 (RFC 5389
+// §6). O magic cookie é o único jeito confiável de distinguir STUN de DTLS
+// (cujo handshake content type também tem bits 0-1 = 00).
+func IsSTUN(b []byte) bool {
+	if len(b) < 20 || b[0]&0xC0 != 0 {
+		return false
+	}
+	return b[4] == 0x21 && b[5] == 0x12 && b[6] == 0xA4 && b[7] == 0x42
+}
 
 func Decode(b []byte) (*Message, error) {
 	if len(b) < HeaderSize {
