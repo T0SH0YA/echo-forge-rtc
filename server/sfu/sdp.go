@@ -18,17 +18,22 @@ import (
 )
 
 type Media struct {
-	Kind       string // "audio" | "video" | "application"
-	Mid        string
-	Protocol   string   // ex: "UDP/TLS/RTP/SAVPF"
-	Fmts       []string // payload types
-	Direction  string   // "sendrecv" | "recvonly" | "sendonly" | "inactive"
-	Setup      string
-	IceUfrag   string
-	IcePwd     string
+	Kind        string // "audio" | "video" | "application"
+	Mid         string
+	Protocol    string   // ex: "UDP/TLS/RTP/SAVPF"
+	Fmts        []string // payload types
+	Direction   string   // "sendrecv" | "recvonly" | "sendonly" | "inactive"
+	Setup       string
+	IceUfrag    string
+	IcePwd      string
 	Fingerprint string
-	Extra      []string // linhas a:* que devolvemos verbatim
+	RIDs        []string // a=rid:<id> send … (publisher anuncia camadas)
+	Simulcast   string   // valor cru de a=simulcast (ex: "send q;h;f")
+	RIDExtID    uint8    // ID extmap pra urn:ietf:…:rtp-stream-id (0 = ausente)
+	RRIDExtID   uint8    // repaired-rtp-stream-id (RTX)
+	Extra       []string // linhas a:* que devolvemos verbatim
 }
+
 
 type SessionDesc struct {
 	Origin      string
@@ -116,12 +121,52 @@ func parseAttr(s *SessionDesc, m *Media, v string) {
 		if m != nil {
 			m.Direction = name
 		}
+	case "rid":
+		if m != nil {
+			// "rid:<id> <direction> [restrictions]" — só guardamos os IDs
+			if id, _, ok := strings.Cut(val, " "); ok {
+				m.RIDs = append(m.RIDs, id)
+			} else {
+				m.RIDs = append(m.RIDs, val)
+			}
+		}
+	case "simulcast":
+		if m != nil {
+			m.Simulcast = val
+		}
+	case "extmap":
+		if m != nil {
+			// "extmap:<id>[/dir] <uri>"
+			idPart, uri, ok := strings.Cut(val, " ")
+			if ok {
+				if slash := strings.IndexByte(idPart, '/'); slash > 0 {
+					idPart = idPart[:slash]
+				}
+				var id uint8
+				for _, c := range idPart {
+					if c < '0' || c > '9' {
+						id = 0
+						break
+					}
+					id = id*10 + uint8(c-'0')
+				}
+				uri = strings.TrimSpace(uri)
+				switch uri {
+				case RIDExtURI:
+					m.RIDExtID = id
+				case RepairExtURI:
+					m.RRIDExtID = id
+				}
+			}
+			m.Extra = append(m.Extra, v)
+		}
 	default:
 		if m != nil {
 			m.Extra = append(m.Extra, v)
 		}
 	}
 }
+
 
 // AnswerParams: o que o servidor anuncia.
 type AnswerParams struct {
@@ -181,12 +226,26 @@ func BuildAnswer(offer *SessionDesc, p AnswerParams) string {
 				fmt.Fprintf(&b, "a=%s\r\n", ex)
 			}
 		}
+		// Espelhamos rid/simulcast: publisher manda send q;h;f → answer
+		// devolve recv q;h;f e a=rid:<id> recv pra cada camada.
+		for _, rid := range m.RIDs {
+			fmt.Fprintf(&b, "a=rid:%s recv\r\n", rid)
+		}
+		if m.Simulcast != "" {
+			// "send q;h;f" → "recv q;h;f"
+			sc := m.Simulcast
+			if strings.HasPrefix(sc, "send ") {
+				sc = "recv " + strings.TrimPrefix(sc, "send ")
+			}
+			fmt.Fprintf(&b, "a=simulcast:%s\r\n", sc)
+		}
 		// Candidato host único (UDP).
 		fmt.Fprintf(&b, "a=candidate:1 1 UDP 2130706431 %s %d typ host\r\n", p.HostIP, p.HostPort)
 		b.WriteString("a=end-of-candidates\r\n")
 	}
 	return b.String()
 }
+
 
 func startsWithAny(s string, ps ...string) bool {
 	for _, p := range ps {

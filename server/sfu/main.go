@@ -67,6 +67,8 @@ func main() {
 		_, _ = w.Write([]byte("ok"))
 	})
 	mux.HandleFunc("/sessions", srv.handleNewSession)
+	mux.HandleFunc("/sessions/", srv.handleSwitchLayer)
+
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -124,6 +126,18 @@ func (s *Server) handleNewSession(w http.ResponseWriter, r *http.Request) {
 	}
 	fp := FingerprintSHA256(cert.Certificate[0])
 
+	// Pega RIDExtID e RIDs do primeiro m-line de vídeo que negociou simulcast.
+	var ridExt, rridExt uint8
+	var rids []string
+	for _, m := range offer.Media {
+		if m.Kind == "video" && len(m.RIDs) > 0 {
+			ridExt = m.RIDExtID
+			rridExt = m.RRIDExtID
+			rids = m.RIDs
+			break
+		}
+	}
+
 	sess := &Session{
 		ID:               uuid.NewString(),
 		LocalUfrag:       RandomUfrag(),
@@ -133,6 +147,9 @@ func (s *Server) handleNewSession(w http.ResponseWriter, r *http.Request) {
 		RemoteFinger:     offer.Fingerprint,
 		LocalCert:        cert,
 		LocalFingerprint: fp,
+		RIDExtID:         ridExt,
+		RRIDExtID:        rridExt,
+		OfferedRIDs:      rids,
 	}
 	s.sessions.Add(sess)
 
@@ -143,12 +160,56 @@ func (s *Server) handleNewSession(w http.ResponseWriter, r *http.Request) {
 		HostIP:      s.publicIP,
 		HostPort:    s.udpPort,
 	})
-	log.Printf("[sfu] session created id=%s ufrag=%s remoteUfrag=%s fp=%s…",
-		sess.ID, sess.LocalUfrag, sess.RemoteUfrag, fp[:24])
+	log.Printf("[sfu] session created id=%s ufrag=%s remoteUfrag=%s fp=%s… rids=%v ridExt=%d",
+		sess.ID, sess.LocalUfrag, sess.RemoteUfrag, fp[:24], rids, ridExt)
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(answerResp{Type: "answer", SDP: answer, SessionID: sess.ID})
 }
+
+// POST /sessions/{subID}/layer  { publisherId, rid }
+type layerReq struct {
+	PublisherID string `json:"publisherId"`
+	RID         string `json:"rid"`
+}
+
+func (s *Server) handleSwitchLayer(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method", http.StatusMethodNotAllowed)
+		return
+	}
+	// URL: /sessions/{id}/layer
+	path := r.URL.Path
+	const prefix = "/sessions/"
+	const suffix = "/layer"
+	if len(path) < len(prefix)+len(suffix) || path[:len(prefix)] != prefix ||
+		path[len(path)-len(suffix):] != suffix {
+		http.NotFound(w, r)
+		return
+	}
+	subID := path[len(prefix) : len(path)-len(suffix)]
+	var req layerReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "bad json", http.StatusBadRequest)
+		return
+	}
+	if req.PublisherID == "" || req.RID == "" {
+		http.Error(w, "publisherId and rid required", http.StatusBadRequest)
+		return
+	}
+	ssrc, err := s.router.SwitchLayer(subID, req.PublisherID, req.RID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"ok":         true,
+		"targetSSRC": ssrc,
+		"rid":        req.RID,
+	})
+}
+
 
 func (s *Server) udpLoop() {
 	buf := make([]byte, 1500)

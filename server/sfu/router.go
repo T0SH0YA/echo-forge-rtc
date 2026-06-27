@@ -87,6 +87,7 @@ func (r *Router) HandleRTP(from *Session, raw []byte) {
 	rtpIn.Add(1)
 	from.mu.Lock()
 	recv := from.srtpRecv
+	ridExtID := from.RIDExtID
 	from.mu.Unlock()
 	if recv == nil {
 		rtpDrop.Add(1)
@@ -104,6 +105,17 @@ func (r *Router) HandleRTP(from *Session, raw []byte) {
 		return
 	}
 	r.trackSSRC(from, hdr.SSRC)
+
+	// Simulcast: tenta extrair RID do header extension e registrar rid↔ssrc.
+	if ridExtID > 0 && hdr.Extension && len(hdr.ExtensionData) > 0 {
+		if v := ParseOneByteExt(hdr.ExtensionProfile, hdr.ExtensionData, ridExtID); len(v) > 0 {
+			rid := string(v)
+			if from.rememberLayer(rid, hdr.SSRC) {
+				log.Printf("[sfu] simulcast layer discovered pub=%s rid=%s ssrc=%d", from.ID, rid, hdr.SSRC)
+			}
+		}
+	}
+
 	r.rtx.Put(hdr.SSRC, hdr.SequenceNumber, hdr.HeaderLen, plain)
 	r.forward(from, plain, hdr.HeaderLen, hdr.SSRC, hdr.SequenceNumber)
 }
@@ -142,13 +154,32 @@ func (r *Router) answerNACK(from *Session, p RTCPPacket) bool {
 			served++
 		}
 	}
-	// Consumimos o NACK localmente sempre que TENTAMOS servir — mesmo com
-	// alguns misses, não vale acordar o publisher (ele já mandou um keyframe
-	// se o gap for grande; PLI cuida disso).
 	return true
 }
 
+// shouldForward decide se o pacote do publisher `pub` (camada `layer`,
+// `ssrc`) deve ir pro subscriber `sub`. Áudio e SSRCs sem layer descoberto
+// passam sempre. Para vídeo simulcast, só passa a camada preferida (ou a
+// mais alta disponível se o subscriber não escolheu).
+func (r *Router) shouldForward(pub, sub *Session, ssrc uint32, layer string) bool {
+	if layer == "" {
+		return true // áudio / single-stream
+	}
+	pref := sub.getPrefLayer(pub.ID)
+	if pref == "" {
+		// fallback: maior camada disponível
+		avail := pub.availableLayers()
+		if len(avail) == 0 {
+			return true
+		}
+		pref = avail[len(avail)-1]
+	}
+	return pref == layer
+}
+
 func (r *Router) forward(from *Session, plain []byte, headerLen int, ssrc uint32, seq uint16) {
+	layer := from.layerOfSSRC(ssrc)
+
 	r.mu.RLock()
 	targets := make([]*Session, 0, len(r.ses))
 	for _, s := range r.ses {
@@ -159,6 +190,9 @@ func (r *Router) forward(from *Session, plain []byte, headerLen int, ssrc uint32
 	r.mu.RUnlock()
 
 	for _, sub := range targets {
+		if !r.shouldForward(from, sub, ssrc, layer) {
+			continue
+		}
 		sub.mu.Lock()
 		send := sub.srtpSend
 		addr := sub.remoteAddr
@@ -179,6 +213,53 @@ func (r *Router) forward(from *Session, plain []byte, headerLen int, ssrc uint32
 		}
 	}
 }
+
+// SwitchLayer: subscriber pede pra trocar a camada que recebe do publisher.
+// Dispara PLI pro publisher pra acelerar a chegada de keyframe da nova
+// camada. Retorna o SSRC alvo (0 se ainda não descoberto).
+func (r *Router) SwitchLayer(subID, pubID, rid string) (uint32, error) {
+	r.mu.RLock()
+	sub := r.ses[subID]
+	pub := r.ses[pubID]
+	r.mu.RUnlock()
+	if sub == nil {
+		return 0, errSubNotFound
+	}
+	if pub == nil {
+		return 0, errPubNotFound
+	}
+	sub.setPrefLayer(pubID, rid)
+
+	pub.mu.Lock()
+	targetSSRC := uint32(0)
+	if pub.layerSSRC != nil {
+		targetSSRC = pub.layerSSRC[rid]
+	}
+	srtcp := pub.srtcpSend
+	addr := pub.remoteAddr
+	pub.mu.Unlock()
+	if targetSSRC != 0 && srtcp != nil && addr != "" {
+		// Manda PLI cifrado pra acelerar keyframe da nova camada.
+		pli := BuildPLI(0, targetSSRC)
+		if cipher, err := srtcp.Encrypt(pli); err == nil {
+			if ua, err := net.ResolveUDPAddr("udp", addr); err == nil {
+				_, _ = r.udp.WriteToUDP(cipher, ua)
+			}
+		}
+	}
+	return targetSSRC, nil
+}
+
+var (
+	errSubNotFound = fmtErr("subscriber not found")
+	errPubNotFound = fmtErr("publisher not found")
+)
+
+type strErr string
+
+func (e strErr) Error() string { return string(e) }
+func fmtErr(s string) error    { return strErr(s) }
+
 
 // HandleRTCP: decifra SRTCP do peer, parseia compound, encaminha feedback
 // pro publisher dono do mediaSSRC.

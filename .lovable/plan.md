@@ -117,13 +117,19 @@ Tudo vive **neste repositório**, em pastas separadas. Lovable é nosso editor +
 - [x] Testes: `BuildNACK`↔`ParseNACK` roundtrip com gap > 16; ring `Put`/`Get` (hit/miss/SSRC isolation); E2E `RouterRTXAnswersNACK` — 5 pacotes cached, subscriber pede {101,103}, recebe os dois RTX decifráveis com sua chave de servidor, publisher NÃO recebe nada.
 - [ ] Simulcast (3 camadas Chrome, layer selection por subscriber via BWE), RTX com SSRC/PT dedicados (RFC 4588), transport-cc loop completo (GCC) e jitter buffer: etapa 10.
 
-### Etapa 10 — SFU: simulcast + BWE
-- Receber 3 camadas simulcast do publisher (Chrome envia nativamente)
-- Layer selection por subscriber baseado em bandwidth estimation
-- Switch entre camadas em keyframe
-- Suporte VP8 + H264; depois VP9/AV1 com SVC
+### Etapa 10 — SFU: simulcast + layer selection + REMB ✅
+- [x] SDP parser estende: `a=rid:<id> send`, `a=simulcast:send q;h;f`, `a=extmap:<id> urn:…:rtp-stream-id` (+ repaired-rtp-stream-id) capturados per-media (`Media.RIDs`, `Simulcast`, `RIDExtID`, `RRIDExtID`).
+- [x] BuildAnswer espelha simulcast e RIDs: `send q;h;f` → `recv q;h;f`, `a=rid:<id> recv` por camada.
+- [x] Parser RFC 8285 one-byte header extension (`ParseOneByteExt`) extrai RID por pacote; sessão registra `rid↔ssrc` na primeira ocorrência (`rememberLayer`/`layerOfSSRC`/`availableLayers`).
+- [x] Detecção de keyframe best-effort: VP8 (RFC 7741 §4.3) + H.264 (Single NAL IDR/SPS/PPS, STAP-A, FU-A start).
+- [x] Layer selection per-subscriber (`prefLayer` no Session, fallback = camada mais alta disponível). Router filtra `shouldForward` por camada — só passa a camada preferida pra cada subscriber.
+- [x] Endpoint `POST /sessions/{subID}/layer` body `{publisherId, rid}`: atualiza preferência E manda PLI cifrado pro publisher acelerar keyframe da nova camada.
+- [x] REMB builder (`BuildREMB`): PSFB fmt=15 com "REMB" identifier, exp(6)+mantissa(18), pronto pra emitir bitrate target consolidado pro publisher.
+- [x] Testes: parse one-byte ext (+ padding), LayerRank q/h/f e l/m/h, SDP simulcast parse+answer espelhamento, Session remember/avail/pref, REMB byte layout + decode roundtrip, VP8/H264 keyframe heuristics.
+- [ ] BWE GCC completo (transport-cc feedback loop + arrival-time filter) e auto-switch baseado em loss/jitter: etapa 11.
 
-### Etapa 10 — DataChannel
+### Etapa 11 — DataChannel
+
 - SCTP sobre DTLS (RFC 8831)
 - Mensagens binárias e texto, ordered/unordered
 - API no SDK: `room.sendData(peerId, payload)`

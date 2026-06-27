@@ -64,6 +64,17 @@ type Session struct {
 
 	publishedSSRCs map[uint32]bool // SSRCs que vimos publicar — mantém set
 
+	// Simulcast (Etapa 10)
+	RIDExtID  uint8             // ID extmap pra urn:…:rtp-stream-id (do offer)
+	RRIDExtID uint8             // repaired-rtp-stream-id (RTX)
+	OfferedRIDs []string        // camadas anunciadas em a=rid:<id> send
+	layerSSRC map[string]uint32 // rid → ssrc descoberto via header ext
+	ssrcLayer map[uint32]string // ssrc → rid (inverso)
+
+	// Preferência por subscriber: qual rid quero receber de cada publisher.
+	// Chave = publisher session ID. "" = layer mais alta disponível.
+	prefLayer map[string]string
+
 	mu           sync.Mutex
 	remoteAddr   string // "ip:port" do par nomeado
 	state        ICEState
@@ -71,6 +82,7 @@ type Session struct {
 	useCandidate bool
 	dtlsStarted  bool
 }
+
 
 func (s *Session) markChecking()        { s.mu.Lock(); s.state = ICEChecking; s.lastActivity = time.Now(); s.mu.Unlock() }
 func (s *Session) markConnected(a string) {
@@ -88,6 +100,70 @@ func (s *Session) RemoteAddr() string {
 	defer s.mu.Unlock()
 	return s.remoteAddr
 }
+
+// rememberLayer registra rid↔ssrc visto num pacote RTP do publisher.
+// Retorna true se foi a primeira vez (caller pode logar/avisar).
+func (s *Session) rememberLayer(rid string, ssrc uint32) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.layerSSRC == nil {
+		s.layerSSRC = map[string]uint32{}
+		s.ssrcLayer = map[uint32]string{}
+	}
+	if cur, ok := s.layerSSRC[rid]; ok && cur == ssrc {
+		return false
+	}
+	s.layerSSRC[rid] = ssrc
+	s.ssrcLayer[ssrc] = rid
+	return true
+}
+
+func (s *Session) layerOfSSRC(ssrc uint32) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.ssrcLayer == nil {
+		return ""
+	}
+	return s.ssrcLayer[ssrc]
+}
+
+// availableLayers devolve as camadas (rid) já descobertas, ordenadas por
+// rank (menor → maior qualidade) usando LayerRank.
+func (s *Session) availableLayers() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	rids := make([]string, 0, len(s.layerSSRC))
+	for r := range s.layerSSRC {
+		rids = append(rids, r)
+	}
+	// sort por rank
+	for i := 1; i < len(rids); i++ {
+		for j := i; j > 0 && LayerRank(rids[j]) < LayerRank(rids[j-1]); j-- {
+			rids[j], rids[j-1] = rids[j-1], rids[j]
+		}
+	}
+	return rids
+}
+
+// setPrefLayer: este (subscriber) prefere receber `rid` do publisher pubID.
+func (s *Session) setPrefLayer(pubID, rid string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.prefLayer == nil {
+		s.prefLayer = map[string]string{}
+	}
+	s.prefLayer[pubID] = rid
+}
+
+func (s *Session) getPrefLayer(pubID string) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.prefLayer == nil {
+		return ""
+	}
+	return s.prefLayer[pubID]
+}
+
 
 // SessionStore: lookup por LocalUfrag, ID e endereço remoto.
 type SessionStore struct {
