@@ -18,7 +18,10 @@ import (
 	"net"
 	"sync"
 	"sync/atomic"
+	"time"
 )
+
+
 
 var (
 	rtpIn   atomic.Uint64
@@ -88,6 +91,9 @@ func (r *Router) HandleRTP(from *Session, raw []byte) {
 	from.mu.Lock()
 	recv := from.srtpRecv
 	ridExtID := from.RIDExtID
+	twccExtID := from.TWCCExtID
+	twcc := from.twcc
+	bwe := from.bwe
 	from.mu.Unlock()
 	if recv == nil {
 		rtpDrop.Add(1)
@@ -116,9 +122,34 @@ func (r *Router) HandleRTP(from *Session, raw []byte) {
 		}
 	}
 
+	// Etapa 13: TWCC seq → recorder; gap por SSRC → BWE loss.
+	if twccExtID > 0 && twcc != nil && hdr.Extension {
+		if seq, ok := ParseTWCCSeq(hdr.ExtensionProfile, hdr.ExtensionData, twccExtID); ok {
+			twcc.SetMediaSSRC(hdr.SSRC)
+			twcc.Record(seq, time.Now().UnixMicro())
+		}
+	}
+	if bwe != nil {
+		from.mu.Lock()
+		if from.lastSeq == nil {
+			from.lastSeq = map[uint32]uint16{}
+		}
+		last, seen := from.lastSeq[hdr.SSRC]
+		from.lastSeq[hdr.SSRC] = hdr.SequenceNumber
+		from.mu.Unlock()
+		bwe.OnReceived(1)
+		if seen {
+			gap := int16(hdr.SequenceNumber - last - 1)
+			if gap > 0 && gap < 100 { // ignora reset/reordenamento grande
+				bwe.OnLost(int(gap))
+			}
+		}
+	}
+
 	r.rtx.Put(hdr.SSRC, hdr.SequenceNumber, hdr.HeaderLen, plain)
 	r.forward(from, plain, hdr.HeaderLen, hdr.SSRC, hdr.SequenceNumber)
 }
+
 
 // answerNACK reentrega localmente os pacotes pedidos via NACK, sem ida
 // até o publisher. Retorna true se conseguiu servir todos (NACK consumido).
