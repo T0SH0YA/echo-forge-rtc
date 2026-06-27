@@ -81,15 +81,20 @@ func (s *Session) RemoteAddr() string {
 	return s.remoteAddr
 }
 
-// SessionStore: lookup por LocalUfrag.
+// SessionStore: lookup por LocalUfrag, ID e endereço remoto.
 type SessionStore struct {
-	mu sync.RWMutex
-	m  map[string]*Session // localUfrag → session
-	id map[string]*Session // id → session
+	mu   sync.RWMutex
+	m    map[string]*Session // localUfrag → session
+	id   map[string]*Session // id → session
+	addr map[string]*Session // "ip:port" → session (preenchido pós-ICE)
 }
 
 func newSessionStore() *SessionStore {
-	return &SessionStore{m: map[string]*Session{}, id: map[string]*Session{}}
+	return &SessionStore{
+		m:    map[string]*Session{},
+		id:   map[string]*Session{},
+		addr: map[string]*Session{},
+	}
 }
 
 func (st *SessionStore) Add(s *Session) {
@@ -111,12 +116,27 @@ func (st *SessionStore) ByID(id string) *Session {
 	return st.id[id]
 }
 
+func (st *SessionStore) ByAddr(a string) *Session {
+	st.mu.RLock()
+	defer st.mu.RUnlock()
+	return st.addr[a]
+}
+
+func (st *SessionStore) BindAddr(a string, s *Session) {
+	st.mu.Lock()
+	st.addr[a] = s
+	st.mu.Unlock()
+}
+
 func (st *SessionStore) Remove(id string) {
 	st.mu.Lock()
 	defer st.mu.Unlock()
 	if s, ok := st.id[id]; ok {
 		delete(st.id, id)
 		delete(st.m, s.LocalUfrag)
+		if s.remoteAddr != "" {
+			delete(st.addr, s.remoteAddr)
+		}
 	}
 }
 
