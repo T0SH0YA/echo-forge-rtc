@@ -24,15 +24,19 @@ import (
 
 
 var (
-	rtpIn   atomic.Uint64
-	rtpFwd  atomic.Uint64
-	rtpDrop atomic.Uint64
-	rtcpIn  atomic.Uint64
-	rtcpFwd atomic.Uint64
-	rtcpFB  atomic.Uint64
-	rtxHit  atomic.Uint64
-	rtxMiss atomic.Uint64
+	rtpIn    atomic.Uint64
+	rtpFwd   atomic.Uint64
+	rtpDrop  atomic.Uint64
+	rtcpIn   atomic.Uint64
+	rtcpFwd  atomic.Uint64
+	rtcpFB   atomic.Uint64
+	rtxHit   atomic.Uint64
+	rtxMiss  atomic.Uint64
+	twccRecv atomic.Uint64 // TWCC FBs consumidos do subscriber (Etapa 14)
+	layerAuto atomic.Uint64
 )
+
+func nowMicros() int64 { return time.Now().UnixMicro() }
 
 type Router struct {
 	udp *net.UDPConn
