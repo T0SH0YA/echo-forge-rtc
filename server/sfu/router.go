@@ -45,11 +45,16 @@ type Router struct {
 	ses  map[string]*Session // sessionID → session
 	ssrc map[uint32]*Session // mediaSSRC → publisher session
 	rtx  *RTXCache
+
+	// Etapa 15: jitter buffer por (publisher, ssrc). Chave string = sessionID|ssrc.
+	jbMu sync.Mutex
+	jbs  map[string]*JitterBuffer
 }
 
 func NewRouter(udp *net.UDPConn) *Router {
-	return &Router{udp: udp, ses: map[string]*Session{}, ssrc: map[uint32]*Session{}, rtx: NewRTXCache()}
+	return &Router{udp: udp, ses: map[string]*Session{}, ssrc: map[uint32]*Session{}, rtx: NewRTXCache(), jbs: map[string]*JitterBuffer{}}
 }
+
 
 func (r *Router) Add(s *Session) {
 	r.mu.Lock()
