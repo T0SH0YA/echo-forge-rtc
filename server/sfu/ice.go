@@ -109,5 +109,8 @@ func (s *Server) maybeStartDTLS(sess *Session, peer *net.UDPAddr) {
 			s.router.Add(sess)
 		}
 		log.Printf("[sfu] dtls+srtp+srtcp ready session=%s srtp_profile=0x%04x", sess.ID, uint16(keys.Profile))
+		// Etapa 11: levanta SCTP/DataChannels sobre o mesmo DTLS.
+		s.startSCTP(sess)
 	}()
 }
+

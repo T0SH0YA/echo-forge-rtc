@@ -75,6 +75,9 @@ type Session struct {
 	// Chave = publisher session ID. "" = layer mais alta disponível.
 	prefLayer map[string]string
 
+	// SCTP / DataChannels (Etapa 11)
+	sctp *sctpState
+
 	mu           sync.Mutex
 	remoteAddr   string // "ip:port" do par nomeado
 	state        ICEState
@@ -82,6 +85,7 @@ type Session struct {
 	useCandidate bool
 	dtlsStarted  bool
 }
+
 
 
 func (s *Session) markChecking()        { s.mu.Lock(); s.state = ICEChecking; s.lastActivity = time.Now(); s.mu.Unlock() }
