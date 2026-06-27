@@ -310,15 +310,10 @@ func (ww *WebMWriter) WriteFrame(trackNum uint8, tsMs int64, keyframe bool, data
 		ww.startCluster(tsMs)
 	}
 	rel := tsMs - ww.curClusterStartMs
-	if rel < -32768 || rel > 32767 {
-		// flush e abre novo cluster
-		if err := ww.flushCluster(); err != nil {
-			return err
-		}
-		ww.startCluster(tsMs)
-		rel = 0
-	} else if rel-int64(ww.curClusterStartMs-ww.curClusterStartMs) >= clusterWindowMs && keyframe && trackNum == trackVideo {
-		// fecha cluster em keyframe se janela cheia
+	// Quebra cluster se relTC estouraria int16 OU se a janela encheu e estamos
+	// num keyframe de vídeo (boundary natural pra seek).
+	if rel < -32768 || rel > 32767 ||
+		(rel >= clusterWindowMs && keyframe && trackNum == trackVideo) {
 		if err := ww.flushCluster(); err != nil {
 			return err
 		}
