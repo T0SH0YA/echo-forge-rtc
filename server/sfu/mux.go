@@ -80,6 +80,23 @@ func (h *RecorderHub) MuxSession(sessionID string) (string, error) {
 		return "", err
 	}
 
+	// Etapa 19: offsets persistidos no manifesto definem onde cada trilha
+	// começa na timeline real. Normalizamos pra que o min vire 0 (player
+	// não engole timestamp negativo) e somamos em cada bloco.
+	var vidOff, audOff int64
+	if vidTrack != nil {
+		vidOff = vidTrack.StartOffsetMs
+	}
+	if audTrack != nil {
+		audOff = audTrack.StartOffsetMs
+	}
+	base := vidOff
+	if audTrack != nil && (vidTrack == nil || audOff < base) {
+		base = audOff
+	}
+	vidOff -= base
+	audOff -= base
+
 	// Carrega todos os blocos e ordena por timestamp pra cluster scheduling
 	// limpo (o WebM permite intercalar; player remonta).
 	type block struct {
