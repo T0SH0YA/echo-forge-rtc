@@ -37,12 +37,12 @@ Tudo vive **neste repositório**, em pastas separadas. Lovable é nosso editor +
 - Setup Go workspace (`go.work`) com módulos para cada server
 - Setup SDK TS com build (tsup) pronto pra `npm publish`
 
-### Etapa 2 — Sinalização + SDK + sala P2P
-- Servidor `signaling` em Go (gorilla/websocket): salas em memória, broadcast de SDP/ICE
-- SDK: `Room.connect(url, token)`, `room.publish(stream)`, `room.subscribe(peerId)`, eventos
-- Playground: duas abas se conectam, vídeo flui peer-to-peer
-- STUN ainda usa servidor público temporário
-- Dockerfile + instrução de `docker run` em VM
+### Etapa 2 — Sinalização + SDK + sala P2P ✅
+- [x] Servidor `signaling` Go (gorilla/websocket): salas em memória, broadcast SDP/ICE, ping/pong, hello-timeout, room GC
+- [x] SDK com perfect negotiation, mesh P2P, publishCamera/Screen, eventos
+- [x] Transporte `bc://` (BroadcastChannel) pra testar duas abas sem servidor
+- [x] Playground real (conectar, publicar, ver remotos)
+- [ ] STUN/TURN: ainda nenhum (LAN/loopback funciona; pra cross-NAT precisa Etapa 3/4)
 
 ### Etapa 3 — STUN próprio
 - Implementar RFC 5389 em Go puro (header, atributos, MESSAGE-INTEGRITY HMAC-SHA1, FINGERPRINT CRC-32, XOR-MAPPED-ADDRESS)
