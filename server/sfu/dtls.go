@@ -21,18 +21,22 @@ import (
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/hex"
 	"fmt"
+	"log"
 	"math/big"
 	"strings"
 	"time"
 
-	"crypto/tls"
-
 	dtls "github.com/pion/dtls/v2"
+	"github.com/pion/logging"
 )
+
+var dtlsLog = logging.NewDefaultLoggerFactory()
+
 
 // SRTP profile que negociamos com o peer. AES-128-GCM = RFC 7714, é o que vamos
 // implementar na Etapa 7.
