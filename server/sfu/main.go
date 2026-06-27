@@ -200,7 +200,7 @@ func (s *Server) statsLoop(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-t.C:
-			log.Printf("[sfu] stats stun_in=%d stun_out=%d", stunIn.Load(), stunOut.Load())
+			log.Printf("[sfu] stats stun_in=%d stun_out=%d dtls_in=%d dtls_ok=%d", stunIn.Load(), stunOut.Load(), dtlsIn.Load(), dtlsHS.Load())
 		}
 	}
 }
