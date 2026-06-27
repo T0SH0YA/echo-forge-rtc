@@ -103,6 +103,7 @@ func (s *Server) maybeStartDTLS(sess *Session, peer *net.UDPAddr) {
 		sess.twcc = NewTWCCRecorder(sess.rtpSSRC)
 		sess.bwe = NewBWE()
 		sess.lastSeq = map[uint32]uint16{}
+		sess.subBWE = NewDownstreamBWE()
 		sess.mu.Unlock()
 
 		dtlsHS.Add(1)
