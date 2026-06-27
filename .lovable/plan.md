@@ -108,7 +108,16 @@ Tudo vive **neste repositório**, em pastas separadas. Lovable é nosso editor +
 - [x] Testes: roundtrip SRTCP, rejeição de tampering, split compound RR+PLI, E2E `RouterFeedbackUpstream` (publisher publica SSRC X, subscriber manda PLI cifrado, publisher recebe PLI cifrado com sua chave de servidor).
 - [ ] RTX cache local (responder NACK sem ida ao publisher), transport-cc loop completo (BWE GCC) e jitter buffer: etapas seguintes.
 
-### Etapa 9 — SFU: simulcast, BWE e RTX
+### Etapa 9 — SFU: RTX cache + NACK responder local ✅
+- [x] Ring buffer per-SSRC de 1024 pacotes RTP plaintext (`rtxcache.go`): `Put(ssrc,seq,headerLen,plain)` em todo RTP recebido, `Get(ssrc,seq)` por hash `seq%N` + validação exata.
+- [x] NACK FCI codec (`rtcp.go`): `BuildNACK(senderSSRC, mediaSSRC, []seq)` agrupa em FCIs (PID+BLP de 16 bits) reusando uma PID por bloco contíguo até 17 seqs; `ParseNACK` expande FCIs em lista de seqs.
+- [x] Router consome NACK localmente: olha no `RTXCache` do publisher dono do `mediaSSRC`, re-cifra cada pacote com `srtpSend` do solicitante e devolve preservando SSRC/SEQ. NACK NÃO sobe pro publisher.
+- [x] PLI, transport-cc e demais FB continuam roteados upstream (Etapa 8).
+- [x] Stats novas: `rtx_hit` / `rtx_miss`.
+- [x] Testes: `BuildNACK`↔`ParseNACK` roundtrip com gap > 16; ring `Put`/`Get` (hit/miss/SSRC isolation); E2E `RouterRTXAnswersNACK` — 5 pacotes cached, subscriber pede {101,103}, recebe os dois RTX decifráveis com sua chave de servidor, publisher NÃO recebe nada.
+- [ ] Simulcast (3 camadas Chrome, layer selection por subscriber via BWE), RTX com SSRC/PT dedicados (RFC 4588), transport-cc loop completo (GCC) e jitter buffer: etapa 10.
+
+### Etapa 10 — SFU: simulcast + BWE
 - Receber 3 camadas simulcast do publisher (Chrome envia nativamente)
 - Layer selection por subscriber baseado em bandwidth estimation
 - Switch entre camadas em keyframe
