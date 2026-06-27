@@ -82,28 +82,32 @@ func (s *Server) maybeStartDTLS(sess *Session, peer *net.UDPAddr) {
 			log.Printf("[sfu] dtls handshake fail session=%s err=%v", sess.ID, err)
 			return
 		}
-		// Cria contextos SRTP (Etapa 7). Cliente cifra com ClientKey, servidor
-		// decifra com ClientKey. Servidor cifra com ServerKey.
+		// Cria contextos SRTP+SRTCP (Etapas 7 e 8). Mesmas chaves dos dois
+		// lados — RFC 7714 §9.
 		recv, errR := NewSRTPContext(keys.ClientKey, keys.ClientSalt)
 		send, errS := NewSRTPContext(keys.ServerKey, keys.ServerSalt)
+		rcpRecv, errCR := NewSRTCPContext(keys.ClientKey, keys.ClientSalt)
+		rcpSend, errCS := NewSRTCPContext(keys.ServerKey, keys.ServerSalt)
 		sess.mu.Lock()
 		sess.dtlsConn = conn
 		sess.srtpKeys = keys
 		sess.dtlsState = DTLSEstablished
-		if errR == nil && errS == nil {
+		if errR == nil && errS == nil && errCR == nil && errCS == nil {
 			sess.srtpRecv = recv
 			sess.srtpSend = send
+			sess.srtcpRecv = rcpRecv
+			sess.srtcpSend = rcpSend
 		}
 		sess.mu.Unlock()
 		dtlsHS.Add(1)
-		if errR != nil || errS != nil {
-			log.Printf("[sfu] srtp ctx init fail session=%s recv=%v send=%v (profile=0x%04x não suportado nesta etapa)",
-				sess.ID, errR, errS, uint16(keys.Profile))
+		if errR != nil || errS != nil || errCR != nil || errCS != nil {
+			log.Printf("[sfu] srtp/srtcp ctx init fail session=%s recv=%v send=%v rcpR=%v rcpS=%v (profile=0x%04x)",
+				sess.ID, errR, errS, errCR, errCS, uint16(keys.Profile))
 			return
 		}
 		if s.router != nil {
 			s.router.Add(sess)
 		}
-		log.Printf("[sfu] dtls+srtp ready session=%s srtp_profile=0x%04x", sess.ID, uint16(keys.Profile))
+		log.Printf("[sfu] dtls+srtp+srtcp ready session=%s srtp_profile=0x%04x", sess.ID, uint16(keys.Profile))
 	}()
 }
