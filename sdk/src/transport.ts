@@ -81,6 +81,8 @@ function openBroadcastChannel(channelName: string, roomId: string): Promise<Sign
 
   const messageHandlers = new Set<(m: SignalingIn) => void>();
   const closeHandlers = new Set<() => void>();
+  // Buffer pra mensagens emitidas antes do consumidor registrar onMessage.
+  const pending: SignalingIn[] = [];
 
   bc.onmessage = (ev) => {
     const frame = ev.data as BCFrame;
@@ -93,9 +95,7 @@ function openBroadcastChannel(channelName: string, roomId: string): Promise<Sign
       const otherId = payload.data.peerId;
       if (knownPeers.has(otherId)) return;
       knownPeers.add(otherId);
-      // notifica o cliente local que existe um novo peer
       emit({ t: "peer-join", data: { peer: { id: otherId } } });
-      // responde com a própria presença pro outro saber de nós
       bc.postMessage({
         channel: roomId,
         from: localPeerId,
@@ -106,7 +106,6 @@ function openBroadcastChannel(channelName: string, roomId: string): Promise<Sign
     }
 
     if (payload.t === "offer" || payload.t === "answer" || payload.t === "ice") {
-      // Reescreve para o formato server→client (adiciona `from`)
       const data = { ...(payload.data as Record<string, unknown>), from: frame.from };
       delete (data as { to?: string }).to;
       emit({ t: payload.t, data } as SignalingIn);
@@ -114,10 +113,14 @@ function openBroadcastChannel(channelName: string, roomId: string): Promise<Sign
   };
 
   function emit(msg: SignalingIn) {
+    if (messageHandlers.size === 0) {
+      pending.push(msg);
+      return;
+    }
     for (const fn of messageHandlers) fn(msg);
   }
 
-  // Sim aberto. Mandar welcome local e anunciar presença.
+  // Welcome local + anúncio de presença. Bufferizado se ninguém ouviu ainda.
   queueMicrotask(() => {
     emit({
       t: "welcome",
@@ -147,7 +150,14 @@ function openBroadcastChannel(channelName: string, roomId: string): Promise<Sign
         payload: msg,
       } satisfies BCFrame);
     },
-    onMessage: (fn) => void messageHandlers.add(fn),
+    onMessage: (fn) => {
+      messageHandlers.add(fn);
+      // drena o que chegou antes do handler ser registrado
+      if (pending.length > 0) {
+        const drain = pending.splice(0, pending.length);
+        for (const m of drain) fn(m);
+      }
+    },
     onClose: (fn) => void closeHandlers.add(fn),
     close: () => {
       bc.close();
