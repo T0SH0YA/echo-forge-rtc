@@ -170,12 +170,52 @@ func parseAttr(s *SessionDesc, m *Media, v string) {
 			}
 			m.Extra = append(m.Extra, v)
 		}
+	case "rtpmap":
+		// "rtpmap:<PT> <name>/<clock>[/<params>]"
+		if m != nil {
+			ptStr, rest, ok := strings.Cut(val, " ")
+			if ok {
+				var pt uint8
+				bad := false
+				for _, c := range ptStr {
+					if c < '0' || c > '9' {
+						bad = true
+						break
+					}
+					pt = pt*10 + uint8(c-'0')
+				}
+				if !bad {
+					name, clockStr, _ := strings.Cut(rest, "/")
+					if slash := strings.IndexByte(clockStr, '/'); slash >= 0 {
+						clockStr = clockStr[:slash]
+					}
+					var clock uint32
+					for _, c := range clockStr {
+						if c < '0' || c > '9' {
+							clock = 0
+							break
+						}
+						clock = clock*10 + uint32(c-'0')
+					}
+					if m.Rtpmap == nil {
+						m.Rtpmap = map[uint8]string{}
+						m.ClockRate = map[uint8]uint32{}
+					}
+					m.Rtpmap[pt] = strings.ToLower(strings.TrimSpace(name))
+					m.ClockRate[pt] = clock
+				}
+			}
+		}
+		if m != nil {
+			m.Extra = append(m.Extra, v)
+		}
 	default:
 		if m != nil {
 			m.Extra = append(m.Extra, v)
 		}
 	}
 }
+
 
 
 // AnswerParams: o que o servidor anuncia.
