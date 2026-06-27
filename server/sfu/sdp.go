@@ -121,12 +121,52 @@ func parseAttr(s *SessionDesc, m *Media, v string) {
 		if m != nil {
 			m.Direction = name
 		}
+	case "rid":
+		if m != nil {
+			// "rid:<id> <direction> [restrictions]" — só guardamos os IDs
+			if id, _, ok := strings.Cut(val, " "); ok {
+				m.RIDs = append(m.RIDs, id)
+			} else {
+				m.RIDs = append(m.RIDs, val)
+			}
+		}
+	case "simulcast":
+		if m != nil {
+			m.Simulcast = val
+		}
+	case "extmap":
+		if m != nil {
+			// "extmap:<id>[/dir] <uri>"
+			idPart, uri, ok := strings.Cut(val, " ")
+			if ok {
+				if slash := strings.IndexByte(idPart, '/'); slash > 0 {
+					idPart = idPart[:slash]
+				}
+				var id uint8
+				for _, c := range idPart {
+					if c < '0' || c > '9' {
+						id = 0
+						break
+					}
+					id = id*10 + uint8(c-'0')
+				}
+				uri = strings.TrimSpace(uri)
+				switch uri {
+				case RIDExtURI:
+					m.RIDExtID = id
+				case RepairExtURI:
+					m.RRIDExtID = id
+				}
+			}
+			m.Extra = append(m.Extra, v)
+		}
 	default:
 		if m != nil {
 			m.Extra = append(m.Extra, v)
 		}
 	}
 }
+
 
 // AnswerParams: o que o servidor anuncia.
 type AnswerParams struct {
