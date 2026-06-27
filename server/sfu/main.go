@@ -178,14 +178,17 @@ func (s *Server) handlePacket(raw []byte, from *net.UDPAddr) {
 		dtlsIn.Add(1)
 		sess := s.sessions.ByAddr(from.String())
 		if sess == nil {
-			// DTLS antes do ICE — descarta. O peer reenvia.
+			log.Printf("[sfu] dtls drop no-session from=%s", from)
 			return
 		}
 		sess.mu.Lock()
 		pipe := sess.dtlsPipe
 		sess.mu.Unlock()
 		if pipe != nil {
+			log.Printf("[sfu] dtls push from=%s len=%d", from, len(raw))
 			pipe.Push(raw)
+		} else {
+			log.Printf("[sfu] dtls drop no-pipe from=%s", from)
 		}
 	default:
 		// SRTP/RTCP entram na Etapa 7.
