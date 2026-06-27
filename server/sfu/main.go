@@ -165,6 +165,7 @@ func (s *Server) udpLoop() {
 }
 
 func (s *Server) handlePacket(raw []byte, from *net.UDPAddr) {
+	log.Printf("[sfu] pkt from=%s len=%d b0=%d stun=%v dtls=%v", from, len(raw), raw[0], IsSTUN(raw), IsDTLS(raw))
 	switch {
 	case IsSTUN(raw):
 		stunIn.Add(1)
