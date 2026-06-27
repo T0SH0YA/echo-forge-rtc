@@ -264,7 +264,7 @@ func (s *Server) handleRecordStart(w http.ResponseWriter, r *http.Request, id st
 		http.Error(w, "method", http.StatusMethodNotAllowed)
 		return
 	}
-	if s.sessions.Get(id) == nil {
+	if s.sessions.ByID(id) == nil {
 		http.Error(w, "session not found", http.StatusNotFound)
 		return
 	}
