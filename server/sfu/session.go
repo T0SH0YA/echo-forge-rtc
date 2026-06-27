@@ -67,9 +67,17 @@ type Session struct {
 	// Simulcast (Etapa 10)
 	RIDExtID  uint8             // ID extmap pra urn:…:rtp-stream-id (do offer)
 	RRIDExtID uint8             // repaired-rtp-stream-id (RTX)
+	TWCCExtID uint8             // transport-wide-cc seq (Etapa 13)
 	OfferedRIDs []string        // camadas anunciadas em a=rid:<id> send
 	layerSSRC map[string]uint32 // rid → ssrc descoberto via header ext
 	ssrcLayer map[uint32]string // ssrc → rid (inverso)
+
+	// TWCC + BWE (Etapa 13)
+	twcc       *TWCCRecorder
+	bwe        *BWE
+	lastSeq    map[uint32]uint16 // ssrc → último seq visto (loss tracking)
+	rtpSSRC    uint32            // SSRC arbitrário do SFU pra FB/REMB
+
 
 	// Preferência por subscriber: qual rid quero receber de cada publisher.
 	// Chave = publisher session ID. "" = layer mais alta disponível.

@@ -31,8 +31,9 @@ type Media struct {
 	Simulcast   string   // valor cru de a=simulcast (ex: "send q;h;f")
 	RIDExtID    uint8    // ID extmap pra urn:ietf:…:rtp-stream-id (0 = ausente)
 	RRIDExtID   uint8    // repaired-rtp-stream-id (RTX)
+	TWCCExtID   uint8    // transport-wide-cc seq (draft-holmer-01)
 	Extra       []string // linhas a:* que devolvemos verbatim
-}
+
 
 
 type SessionDesc struct {
@@ -156,7 +157,10 @@ func parseAttr(s *SessionDesc, m *Media, v string) {
 					m.RIDExtID = id
 				case RepairExtURI:
 					m.RRIDExtID = id
+				case TWCCExtURI:
+					m.TWCCExtID = id
 				}
+
 			}
 			m.Extra = append(m.Extra, v)
 		}
