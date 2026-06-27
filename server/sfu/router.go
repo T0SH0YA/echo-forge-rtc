@@ -75,8 +75,10 @@ func (r *Router) Remove(id string) {
 			if owner == s {
 				delete(r.ssrc, ssrc)
 				r.closeJB(id, ssrc)
+				r.rec.CloseSSRC(id, ssrc)
 			}
 		}
+
 	}
 }
 
