@@ -128,7 +128,17 @@ Tudo vive **neste repositório**, em pastas separadas. Lovable é nosso editor +
 - [x] Testes: parse one-byte ext (+ padding), LayerRank q/h/f e l/m/h, SDP simulcast parse+answer espelhamento, Session remember/avail/pref, REMB byte layout + decode roundtrip, VP8/H264 keyframe heuristics.
 - [ ] BWE GCC completo (transport-cc feedback loop + arrival-time filter) e auto-switch baseado em loss/jitter: etapa 11.
 
-### Etapa 11 — DataChannel
+### Etapa 11 — DataChannel (SCTP/DCEP) ✅
+- [x] Associação SCTP sobre `*dtls.Conn` (pion/sctp, MIT) levantada automaticamente quando DTLS estabelece (`startSCTP` em `sctp.go`).
+- [x] DCEP (RFC 8832): parser `ParseDCEPOpen` (label+protocol+priority+reliability), `BuildDCEPAck` e `buildDCEPOpen` próprios; respondemos ACK ao receber OPEN do browser.
+- [x] PPIDs RFC 8831 (50/51/53/56/57) demuxados: DCEP tratado localmente, payloads de aplicação (string/binary) roteados.
+- [x] Forwarding 1→N por label: mensagem chega no stream "chat" do publisher → SFU abre stream "chat" em cada subscriber (com DCEP_OPEN), encaminha preservando PPID.
+- [x] Stats: `sctp` (associações), `dc` (channels), `dc_in` / `dc_fwd` (mensagens).
+- [x] Testes: DCEP parse válido/inválido/truncado, roundtrip build↔parse, ACK byte exato, campo protocol não-vazio.
+- [ ] Negociação SID via DCEP completa (par/ímpar conforme DTLS role), reliability não-confiável (max retransmits / max lifetime), API no SDK (`room.sendData`): seguem na etapa 12.
+
+### Etapa 12 — DataChannel (continuação anterior)
+
 
 - SCTP sobre DTLS (RFC 8831)
 - Mensagens binárias e texto, ordered/unordered
