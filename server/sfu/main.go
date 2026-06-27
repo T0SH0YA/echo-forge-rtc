@@ -215,10 +215,11 @@ func (s *Server) statsLoop(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-t.C:
-			log.Printf("[sfu] stats stun_in=%d stun_out=%d dtls_in=%d dtls_ok=%d rtp_in=%d rtp_fwd=%d rtp_drop=%d rtcp_in=%d rtcp_fwd=%d rtcp_fb=%d",
+			log.Printf("[sfu] stats stun_in=%d stun_out=%d dtls_in=%d dtls_ok=%d rtp_in=%d rtp_fwd=%d rtp_drop=%d rtcp_in=%d rtcp_fwd=%d rtcp_fb=%d rtx_hit=%d rtx_miss=%d",
 				stunIn.Load(), stunOut.Load(), dtlsIn.Load(), dtlsHS.Load(),
 				rtpIn.Load(), rtpFwd.Load(), rtpDrop.Load(),
-				rtcpIn.Load(), rtcpFwd.Load(), rtcpFB.Load())
+				rtcpIn.Load(), rtcpFwd.Load(), rtcpFB.Load(),
+				rtxHit.Load(), rtxMiss.Load())
 		}
 	}
 }

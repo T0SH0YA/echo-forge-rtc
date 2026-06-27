@@ -27,6 +27,8 @@ var (
 	rtcpIn  atomic.Uint64
 	rtcpFwd atomic.Uint64
 	rtcpFB  atomic.Uint64
+	rtxHit  atomic.Uint64
+	rtxMiss atomic.Uint64
 )
 
 type Router struct {
@@ -35,10 +37,11 @@ type Router struct {
 	mu   sync.RWMutex
 	ses  map[string]*Session // sessionID → session
 	ssrc map[uint32]*Session // mediaSSRC → publisher session
+	rtx  *RTXCache
 }
 
 func NewRouter(udp *net.UDPConn) *Router {
-	return &Router{udp: udp, ses: map[string]*Session{}, ssrc: map[uint32]*Session{}}
+	return &Router{udp: udp, ses: map[string]*Session{}, ssrc: map[uint32]*Session{}, rtx: NewRTXCache()}
 }
 
 func (r *Router) Add(s *Session) {
@@ -101,7 +104,48 @@ func (r *Router) HandleRTP(from *Session, raw []byte) {
 		return
 	}
 	r.trackSSRC(from, hdr.SSRC)
+	r.rtx.Put(hdr.SSRC, hdr.SequenceNumber, hdr.HeaderLen, plain)
 	r.forward(from, plain, hdr.HeaderLen, hdr.SSRC, hdr.SequenceNumber)
+}
+
+// answerNACK reentrega localmente os pacotes pedidos via NACK, sem ida
+// até o publisher. Retorna true se conseguiu servir todos (NACK consumido).
+func (r *Router) answerNACK(from *Session, p RTCPPacket) bool {
+	lost := ParseNACK(p)
+	if len(lost) == 0 {
+		return true
+	}
+	from.mu.Lock()
+	send := from.srtpSend
+	addr := from.remoteAddr
+	from.mu.Unlock()
+	if send == nil || addr == "" {
+		return false
+	}
+	ua, err := net.ResolveUDPAddr("udp", addr)
+	if err != nil {
+		return false
+	}
+	served := 0
+	for _, seq := range lost {
+		headerLen, plain, ok := r.rtx.Get(p.MediaSSRC, seq)
+		if !ok {
+			rtxMiss.Add(1)
+			continue
+		}
+		out, err := send.Encrypt(plain, headerLen, p.MediaSSRC, seq)
+		if err != nil {
+			continue
+		}
+		if _, err := r.udp.WriteToUDP(out, ua); err == nil {
+			rtxHit.Add(1)
+			served++
+		}
+	}
+	// Consumimos o NACK localmente sempre que TENTAMOS servir — mesmo com
+	// alguns misses, não vale acordar o publisher (ele já mandou um keyframe
+	// se o gap for grande; PLI cuida disso).
+	return true
 }
 
 func (r *Router) forward(from *Session, plain []byte, headerLen int, ssrc uint32, seq uint16) {
@@ -156,9 +200,15 @@ func (r *Router) HandleRTCP(from *Session, raw []byte) {
 		return
 	}
 	// Agrupa feedback por owner pra enviar um compound por destino.
+	// NACKs são CONSUMIDOS localmente via RTX cache; só PLI/transport-cc/etc.
+	// sobem pro publisher.
 	byOwner := map[*Session][]RTCPPacket{}
 	for _, p := range pkts {
 		if !p.IsFeedback() {
+			continue
+		}
+		if p.IsNACK() {
+			r.answerNACK(from, p)
 			continue
 		}
 		r.mu.RLock()
