@@ -67,7 +67,7 @@ func main() {
 		_, _ = w.Write([]byte("ok"))
 	})
 	mux.HandleFunc("/sessions", srv.handleNewSession)
-	mux.HandleFunc("/sessions/", srv.handleSwitchLayer)
+	mux.HandleFunc("/sessions/", srv.handleSessionSub)
 
 
 	ctx, cancel := context.WithCancel(context.Background())
