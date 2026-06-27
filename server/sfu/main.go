@@ -186,27 +186,57 @@ func (s *Server) handleNewSession(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(answerResp{Type: "answer", SDP: answer, SessionID: sess.ID})
 }
 
-// POST /sessions/{subID}/layer  { publisherId, rid }
+// POST /sessions/{id}/layer            { publisherId, rid }
+// POST /sessions/{id}/record/start
+// POST /sessions/{id}/record/stop
+// GET  /sessions/{id}/record            → manifesto JSON
 type layerReq struct {
 	PublisherID string `json:"publisherId"`
 	RID         string `json:"rid"`
 }
 
-func (s *Server) handleSwitchLayer(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleSessionSub(w http.ResponseWriter, r *http.Request) {
+	const prefix = "/sessions/"
+	path := r.URL.Path
+	if len(path) <= len(prefix) || path[:len(prefix)] != prefix {
+		http.NotFound(w, r)
+		return
+	}
+	rest := path[len(prefix):]
+	// rest = "{id}/{sub...}"
+	slash := -1
+	for i := 0; i < len(rest); i++ {
+		if rest[i] == '/' {
+			slash = i
+			break
+		}
+	}
+	if slash < 0 {
+		http.NotFound(w, r)
+		return
+	}
+	id := rest[:slash]
+	sub := rest[slash+1:]
+
+	switch sub {
+	case "layer":
+		s.handleSwitchLayer(w, r, id)
+	case "record/start":
+		s.handleRecordStart(w, r, id)
+	case "record/stop":
+		s.handleRecordStop(w, r, id)
+	case "record":
+		s.handleRecordGet(w, r, id)
+	default:
+		http.NotFound(w, r)
+	}
+}
+
+func (s *Server) handleSwitchLayer(w http.ResponseWriter, r *http.Request, subID string) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method", http.StatusMethodNotAllowed)
 		return
 	}
-	// URL: /sessions/{id}/layer
-	path := r.URL.Path
-	const prefix = "/sessions/"
-	const suffix = "/layer"
-	if len(path) < len(prefix)+len(suffix) || path[:len(prefix)] != prefix ||
-		path[len(path)-len(suffix):] != suffix {
-		http.NotFound(w, r)
-		return
-	}
-	subID := path[len(prefix) : len(path)-len(suffix)]
 	var req layerReq
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "bad json", http.StatusBadRequest)
@@ -227,6 +257,58 @@ func (s *Server) handleSwitchLayer(w http.ResponseWriter, r *http.Request) {
 		"targetSSRC": ssrc,
 		"rid":        req.RID,
 	})
+}
+
+func (s *Server) handleRecordStart(w http.ResponseWriter, r *http.Request, id string) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method", http.StatusMethodNotAllowed)
+		return
+	}
+	if s.sessions.Get(id) == nil {
+		http.Error(w, "session not found", http.StatusNotFound)
+		return
+	}
+	if err := s.router.rec.Start(id); err != nil {
+		http.Error(w, err.Error(), http.StatusServiceUnavailable)
+		return
+	}
+	writeManifest(w, s.router.rec, id)
+}
+
+func (s *Server) handleRecordStop(w http.ResponseWriter, r *http.Request, id string) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method", http.StatusMethodNotAllowed)
+		return
+	}
+	if err := s.router.rec.Stop(id); err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	writeManifest(w, s.router.rec, id)
+}
+
+func (s *Server) handleRecordGet(w http.ResponseWriter, r *http.Request, id string) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method", http.StatusMethodNotAllowed)
+		return
+	}
+	writeManifest(w, s.router.rec, id)
+}
+
+func writeManifest(w http.ResponseWriter, h *RecorderHub, id string) {
+	if !h.Enabled() {
+		http.Error(w, "recorder disabled (set SFU_RECORD_DIR)", http.StatusServiceUnavailable)
+		return
+	}
+	m, err := h.Manifest(id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	enc := json.NewEncoder(w)
+	enc.SetIndent("", "  ")
+	_ = enc.Encode(m)
 }
 
 
