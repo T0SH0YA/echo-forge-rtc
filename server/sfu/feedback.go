@@ -8,8 +8,10 @@ import (
 	"crypto/rand"
 	"log"
 	"net"
+	"sync/atomic"
 	"time"
 )
+
 
 var (
 	twccSent atomic.Uint64
