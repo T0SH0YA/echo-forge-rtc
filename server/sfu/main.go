@@ -29,9 +29,6 @@ import (
 
 const softwareName = "webrtc-own-sfu/0.1"
 
-// Fingerprint placeholder até a Etapa 6 gerar cert DTLS de verdade.
-const placeholderFingerprint = "sha-256 00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00"
-
 type Server struct {
 	udp      *net.UDPConn
 	publicIP string
@@ -42,6 +39,8 @@ type Server struct {
 var (
 	stunIn  atomic.Uint64
 	stunOut atomic.Uint64
+	dtlsIn  atomic.Uint64
+	dtlsHS  atomic.Uint64
 )
 
 func main() {
