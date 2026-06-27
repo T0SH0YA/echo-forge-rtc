@@ -393,6 +393,15 @@ func (ww *WebMWriter) flushCluster() error {
 	body := make([]byte, 0, len(tc)+len(ww.pendingBlocks))
 	body = append(body, tc...)
 	body = append(body, ww.pendingBlocks...)
+	// Cue: posição do cluster relativa ao início do Segment data.
+	pos := ww.cw.n - ww.segmentDataStart
+	cueTrack := uint8(trackVideo)
+	if !ww.hasVideo {
+		cueTrack = trackAudio
+	}
+	ww.cuePoints = append(ww.cuePoints, cuePoint{
+		tcMs: uint64(ww.curClusterStartMs), clusterPos: uint64(pos), track: cueTrack,
+	})
 	if err := putElem(ww.w, idCluster, body); err != nil {
 		return err
 	}
@@ -402,5 +411,25 @@ func (ww *WebMWriter) flushCluster() error {
 }
 
 func (ww *WebMWriter) Close() error {
-	return ww.flushCluster()
+	if err := ww.flushCluster(); err != nil {
+		return err
+	}
+	if len(ww.cuePoints) == 0 {
+		return nil
+	}
+	// Cues element no fim do Segment (válido em WebM/Matroska).
+	var cuePts [][]byte
+	for _, cp := range ww.cuePoints {
+		positions := wrap(idCueTrackPositions,
+			putUint(idCueTrack, uint64(cp.track)),
+			putUint(idCueClusterPosition, cp.clusterPos),
+		)
+		cuePts = append(cuePts, wrap(idCuePoint,
+			putUint(idCueTime, cp.tcMs),
+			positions,
+		))
+	}
+	cues := wrap(idCues, cuePts...)
+	_, err := ww.cw.Write(cues)
+	return err
 }
