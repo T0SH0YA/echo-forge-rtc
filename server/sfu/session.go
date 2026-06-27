@@ -9,6 +9,8 @@ import (
 	"sync"
 	"time"
 
+	"crypto/tls"
+
 	dtls "github.com/pion/dtls/v2"
 )
 
