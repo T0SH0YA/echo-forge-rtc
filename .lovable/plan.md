@@ -99,13 +99,16 @@ Tudo vive **neste repositório**, em pastas separadas. Lovable é nosso editor +
 - [x] Testes: roundtrip GCM, rejeição de pacote adulterado (auth tag), wrap de ROC, forwarding 1→2 com decifragem por chaves distintas em cada subscriber, demux RTP vs RTCP vs STUN
 - [ ] SRTCP (E-bit + index distinto), AES-CM+HMAC-SHA1 fallback, simulcast/SVC: etapas seguintes
 
-### Etapa 8 — SFU: feedback e qualidade
-- RTCP: NACK + RTX (retransmissão), PLI/FIR (keyframe request), receiver reports
-- Transport-CC: feedback de chegada de pacotes
-- REMB inicial (estimativa simples), depois GCC (loss + delay based)
-- Jitter buffer mínimo no servidor
+### Etapa 8 — SFU: SRTCP + feedback upstream ✅
+- [x] SRTCP AES-128-GCM (`srtcp.go`, RFC 7714 §9): IV = salt XOR (00 00‖SSRC‖00 00‖idx31), AAD = pkt[0..7]‖trailer(E||idx), layout `[hdr8][cipher][tag16][E||idx4]`. Index TX monotônico per-contexto.
+- [x] Parser RTCP compound (`rtcp.go`): split por length-words, helpers `IsPLI`/`IsNACK`/`IsTransportCC`, builder `BuildPLI` (PSFB fmt=1, 12B).
+- [x] Router: tracking de SSRC→publisher (`trackSSRC` em todo RTP recebido). `HandleRTCP` decifra SRTCP do subscriber, parseia compound, agrupa feedback (PLI/NACK/transport-cc) por owner do mediaSSRC e reencaminha cifrado com `srtcpSend` do publisher.
+- [x] `srtcpRecv`/`srtcpSend` por sessão (mesmas chaves SRTP, RFC 7714 §9); init disparado quando DTLS estabelece.
+- [x] Stats: `rtcp_in`/`rtcp_fwd`/`rtcp_fb`.
+- [x] Testes: roundtrip SRTCP, rejeição de tampering, split compound RR+PLI, E2E `RouterFeedbackUpstream` (publisher publica SSRC X, subscriber manda PLI cifrado, publisher recebe PLI cifrado com sua chave de servidor).
+- [ ] RTX cache local (responder NACK sem ida ao publisher), transport-cc loop completo (BWE GCC) e jitter buffer: etapas seguintes.
 
-### Etapa 9 — SFU: simulcast e SVC
+### Etapa 9 — SFU: simulcast, BWE e RTX
 - Receber 3 camadas simulcast do publisher (Chrome envia nativamente)
 - Layer selection por subscriber baseado em bandwidth estimation
 - Switch entre camadas em keyframe
