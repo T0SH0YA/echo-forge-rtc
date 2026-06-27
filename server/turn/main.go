@@ -455,5 +455,5 @@ func shutdownOnSignal(cancel context.CancelFunc, conn *net.UDPConn) {
 
 // randRead embrulha crypto/rand sem retornar erro pra call site quente.
 func randRead(b []byte) (int, error) {
-	return cryptoReader.Read(b)
+	return crand.Read(b)
 }
