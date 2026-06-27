@@ -200,9 +200,15 @@ func (r *Router) HandleRTCP(from *Session, raw []byte) {
 		return
 	}
 	// Agrupa feedback por owner pra enviar um compound por destino.
+	// NACKs são CONSUMIDOS localmente via RTX cache; só PLI/transport-cc/etc.
+	// sobem pro publisher.
 	byOwner := map[*Session][]RTCPPacket{}
 	for _, p := range pkts {
 		if !p.IsFeedback() {
+			continue
+		}
+		if p.IsNACK() {
+			r.answerNACK(from, p)
 			continue
 		}
 		r.mu.RLock()
