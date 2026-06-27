@@ -24,15 +24,19 @@ import (
 
 
 var (
-	rtpIn   atomic.Uint64
-	rtpFwd  atomic.Uint64
-	rtpDrop atomic.Uint64
-	rtcpIn  atomic.Uint64
-	rtcpFwd atomic.Uint64
-	rtcpFB  atomic.Uint64
-	rtxHit  atomic.Uint64
-	rtxMiss atomic.Uint64
+	rtpIn    atomic.Uint64
+	rtpFwd   atomic.Uint64
+	rtpDrop  atomic.Uint64
+	rtcpIn   atomic.Uint64
+	rtcpFwd  atomic.Uint64
+	rtcpFB   atomic.Uint64
+	rtxHit   atomic.Uint64
+	rtxMiss  atomic.Uint64
+	twccRecv atomic.Uint64 // TWCC FBs consumidos do subscriber (Etapa 14)
+	layerAuto atomic.Uint64
 )
+
+func nowMicros() int64 { return time.Now().UnixMicro() }
 
 type Router struct {
 	udp *net.UDPConn
@@ -147,8 +151,11 @@ func (r *Router) HandleRTP(from *Session, raw []byte) {
 	}
 
 	r.rtx.Put(hdr.SSRC, hdr.SequenceNumber, hdr.HeaderLen, plain)
-	r.forward(from, plain, hdr.HeaderLen, hdr.SSRC, hdr.SequenceNumber)
+	r.forward(from, plain, hdr, ssrcLayer(from, hdr.SSRC))
 }
+
+// ssrcLayer evita chamar layerOfSSRC duas vezes (router já chamou via from).
+func ssrcLayer(s *Session, ssrc uint32) string { return s.layerOfSSRC(ssrc) }
 
 
 // answerNACK reentrega localmente os pacotes pedidos via NACK, sem ida
@@ -208,9 +215,9 @@ func (r *Router) shouldForward(pub, sub *Session, ssrc uint32, layer string) boo
 	return pref == layer
 }
 
-func (r *Router) forward(from *Session, plain []byte, headerLen int, ssrc uint32, seq uint16) {
-	layer := from.layerOfSSRC(ssrc)
-
+func (r *Router) forward(from *Session, plain []byte, hdr *RTPHeader, layer string) {
+	ssrc := hdr.SSRC
+	seq := hdr.SequenceNumber
 	r.mu.RLock()
 	targets := make([]*Session, 0, len(r.ses))
 	for _, s := range r.ses {
@@ -220,6 +227,7 @@ func (r *Router) forward(from *Session, plain []byte, headerLen int, ssrc uint32
 	}
 	r.mu.RUnlock()
 
+	now := nowMicros()
 	for _, sub := range targets {
 		if !r.shouldForward(from, sub, ssrc, layer) {
 			continue
@@ -227,6 +235,8 @@ func (r *Router) forward(from *Session, plain []byte, headerLen int, ssrc uint32
 		sub.mu.Lock()
 		send := sub.srtpSend
 		addr := sub.remoteAddr
+		subTwccID := sub.TWCCExtID
+		subBWE := sub.subBWE
 		sub.mu.Unlock()
 		if send == nil || addr == "" {
 			continue
@@ -235,12 +245,29 @@ func (r *Router) forward(from *Session, plain []byte, headerLen int, ssrc uint32
 		if err != nil {
 			continue
 		}
-		out, err := send.Encrypt(plain, headerLen, ssrc, seq)
+		// Etapa 14: reescreve twcc seq na header extension pro espaço do
+		// subscriber, registra (twcc_seq, sent_us) pro BWE downstream.
+		outPlain := plain
+		var twccSeq uint16
+		twccRewritten := false
+		if subTwccID > 0 && hdr.Extension {
+			candidateSeq := sub.nextSubTwccSeq()
+			rewritten := CloneRTPAndRewriteTWCC(plain, hdr, subTwccID, candidateSeq)
+			if &rewritten[0] != &plain[0] { // realmente clonou (ext encontrada)
+				outPlain = rewritten
+				twccSeq = candidateSeq
+				twccRewritten = true
+			}
+		}
+		out, err := send.Encrypt(outPlain, hdr.HeaderLen, ssrc, seq)
 		if err != nil {
 			continue
 		}
 		if _, err := r.udp.WriteToUDP(out, ua); err == nil {
 			rtpFwd.Add(1)
+			if twccRewritten {
+				subBWE.RecordSent(twccSeq, now, len(out)*8)
+			}
 		}
 	}
 }
@@ -312,8 +339,9 @@ func (r *Router) HandleRTCP(from *Session, raw []byte) {
 		return
 	}
 	// Agrupa feedback por owner pra enviar um compound por destino.
-	// NACKs são CONSUMIDOS localmente via RTX cache; só PLI/transport-cc/etc.
-	// sobem pro publisher.
+	// NACKs CONSUMIDOS localmente via RTX cache; transport-cc CONSUMIDO
+	// localmente pra alimentar o BWE downstream (não sobe pro publisher).
+	// PLI/FIR/REMB sobem.
 	byOwner := map[*Session][]RTCPPacket{}
 	for _, p := range pkts {
 		if !p.IsFeedback() {
@@ -321,6 +349,16 @@ func (r *Router) HandleRTCP(from *Session, raw []byte) {
 		}
 		if p.IsNACK() {
 			r.answerNACK(from, p)
+			continue
+		}
+		if p.IsTransportCC() {
+			if _, _, arrivals, err := ParseTWCCFeedback(p); err == nil {
+				from.mu.Lock()
+				bwe := from.subBWE
+				from.mu.Unlock()
+				bwe.OnFeedback(arrivals)
+				twccRecv.Add(1)
+			}
 			continue
 		}
 		r.mu.RLock()

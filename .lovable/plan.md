@@ -146,7 +146,20 @@ Tudo vive **neste repositório**, em pastas separadas. Lovable é nosso editor +
 - [x] ICE restart automático: `onconnectionstatechange` em `failed`/`disconnected` agenda restart (lado impolite ofertante) com `createOffer({ iceRestart: true })`.
 - [x] Typecheck SDK verde (`tsgo --noEmit`).
 
-### Etapa 11 — Endurecimento
+### Etapa 13 — TWCC (RX) + BWE/REMB upstream ✅
+- [x] `twcc.go` recorder + RTPFB fmt=15 builder (Status Vector Chunks 2-bit, deltas 250µs).
+- [x] `bwe.go` loss-based AIMD; `feedback.go` loop 50ms TWCC + 1s REMB.
+
+### Etapa 14 — TWCC FB consumer + GCC delay-based downstream + auto layer switch ✅
+- [x] `twccparse.go` — parser completo de RTPFB fmt=15: Run-Length (S=2 bits, length=13), Status Vector T=0 (14×1 bit) e T=1 (7×2 bits), deltas small(uint8) e large(int16), ref-time signed 24-bit. Saída: `[]TWCCArrival{seq, received, arrival_us}` com tempos absolutos.
+- [x] `gcc.go` — `DownstreamBWE` por subscriber: histórico `(twcc_seq → sent_us, size_bits)` em ring 1024; `OnFeedback` calcula loss + delay-gradient acumulado (Σ Δrecv−Δsent) na janela; AIMD: overuse (>10ms acumulado) ou loss>10% → −15%; clean (loss<2%, delay<2ms) → +8%; clamp [50k, 10M], init 1Mbps. `PickLayer(estimate, layers)` mapeia banda → rid (q≈200k, h≈600k, f≈1.7M).
+- [x] `egress.go` — `RewriteOneByteExtValue` (RFC 8285) e `CloneRTPAndRewriteTWCC`: clona pacote por subscriber e reescreve os 2 bytes do twcc seq na header extension. Sem isso, dois subscribers usariam o mesmo espaço de seqs e os FBs ficariam ambíguos. Como o RTP header inteiro vira AAD, reescrever antes do SRTP.Encrypt é seguro.
+- [x] Router: `forward` agora aloca twcc seq local por subscriber, reescreve, registra `sent_us` no `DownstreamBWE`. `HandleRTCP` consome TWCC FB localmente (não sobe pro publisher) e alimenta o BWE.
+- [x] Feedback loop: tick de 2s `autoSwitchLayers` — pra cada subscriber, escolhe a melhor camada que cabe na sua estimativa downstream e chama `SwitchLayer` (que dispara PLI) só se a escolha mudou desde a última iteração.
+- [x] Stats novos: `twcc_in` (FBs consumidos), `layer_auto` (switches automáticos).
+- [x] Testes: `twccparse_test` (roundtrip build↔parse, perda no meio, run-length 20 pacotes); `gcc_test` (overuse decresce, clean cresce, loss decresce, PickLayer por banda, rewrite one-byte ext). Build + testes verdes.
+
+### Etapa 15 (próxima) — opções
 - Reconexão automática (ICE restart) no SDK
 - Métricas Prometheus em todos os servers
 - Load test (artillery + headless chrome) — 100, 500, 1000 peers por SFU

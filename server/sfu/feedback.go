@@ -26,8 +26,10 @@ func (r *Router) StartFeedbackLoop(ctx context.Context) {
 func (r *Router) feedbackLoop(ctx context.Context) {
 	twccTick := time.NewTicker(50 * time.Millisecond)
 	rembTick := time.NewTicker(1 * time.Second)
+	autoTick := time.NewTicker(2 * time.Second)
 	defer twccTick.Stop()
 	defer rembTick.Stop()
+	defer autoTick.Stop()
 	for {
 		select {
 		case <-ctx.Done():
@@ -36,6 +38,52 @@ func (r *Router) feedbackLoop(ctx context.Context) {
 			r.flushTWCC()
 		case <-rembTick.C:
 			r.flushREMB()
+		case <-autoTick.C:
+			r.autoSwitchLayers()
+		}
+	}
+}
+
+// autoSwitchLayers: pra cada subscriber, avalia a estimativa downstream e
+// escolhe pra cada publisher visível a melhor camada que cabe. Se a escolha
+// mudar em relação ao último auto-switch, dispara SwitchLayer (PLI inclusa).
+func (r *Router) autoSwitchLayers() {
+	r.mu.RLock()
+	all := make([]*Session, 0, len(r.ses))
+	for _, s := range r.ses {
+		all = append(all, s)
+	}
+	r.mu.RUnlock()
+	for _, sub := range all {
+		est := sub.subBWE.Estimate()
+		if est == 0 {
+			continue
+		}
+		for _, pub := range all {
+			if pub == sub {
+				continue
+			}
+			layers := pub.availableLayers()
+			if len(layers) < 2 {
+				continue
+			}
+			pick := PickLayer(est, layers)
+			if pick == "" {
+				continue
+			}
+			sub.mu.Lock()
+			if sub.autoLayer == nil {
+				sub.autoLayer = map[string]string{}
+			}
+			prev := sub.autoLayer[pub.ID]
+			sub.autoLayer[pub.ID] = pick
+			sub.mu.Unlock()
+			if prev == pick {
+				continue
+			}
+			if _, err := r.SwitchLayer(sub.ID, pub.ID, pick); err == nil {
+				layerAuto.Add(1)
+			}
 		}
 	}
 }

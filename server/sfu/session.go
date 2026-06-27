@@ -78,6 +78,13 @@ type Session struct {
 	lastSeq    map[uint32]uint16 // ssrc → último seq visto (loss tracking)
 	rtpSSRC    uint32            // SSRC arbitrário do SFU pra FB/REMB
 
+	// Downstream BWE (Etapa 14) — espaço de twcc seq local pro EGRESSO
+	// (este peer é o subscriber recebendo do SFU) e estimador delay-based.
+	subBWE     *DownstreamBWE
+	subTwccSeq uint16
+	// auto-switch: última camada escolhida automaticamente por publisher
+	autoLayer  map[string]string
+
 
 	// Preferência por subscriber: qual rid quero receber de cada publisher.
 	// Chave = publisher session ID. "" = layer mais alta disponível.
@@ -174,6 +181,16 @@ func (s *Session) getPrefLayer(pubID string) string {
 		return ""
 	}
 	return s.prefLayer[pubID]
+}
+
+// nextSubTwccSeq devolve o próximo twcc seq pra um pacote saindo PRA este
+// peer (subscriber). Wrap natural de uint16.
+func (s *Session) nextSubTwccSeq() uint16 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	v := s.subTwccSeq
+	s.subTwccSeq++
+	return v
 }
 
 
