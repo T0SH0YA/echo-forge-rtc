@@ -357,6 +357,14 @@ type streamRecorder struct {
 	closedAt time.Time
 	closed   bool
 
+	// Offset/sync (Etapa 19): primeira escrita determina o offset relativo
+	// ao início da sessão; persistido no manifesto pro mux pós-call alinhar
+	// vídeo e áudio na timeline real.
+	sessionStart  time.Time
+	offsetSet     atomic.Bool
+	startOffsetMs atomic.Int64
+	firstRtpTs    atomic.Uint32
+
 	frames atomic.Uint64
 	bytes  atomic.Uint64
 	width  atomic.Uint32
@@ -379,11 +387,28 @@ func (r *streamRecorder) snapshot() *TrackManifest {
 		File: r.file, OpenedAt: ts(r.openedAt),
 		Frames: r.frames.Load(), Bytes: r.bytes.Load(),
 		Width: uint16(r.width.Load()), Height: uint16(r.height.Load()),
+		StartOffsetMs: r.startOffsetMs.Load(),
+		FirstRtpTs:    r.firstRtpTs.Load(),
 	}
 	if !r.closedAt.IsZero() {
 		t.ClosedAt = ts(r.closedAt)
 	}
 	return t
+}
+
+// markFirst registra offset relativo à sessão na primeira escrita.
+func (r *streamRecorder) markFirst(hdr *RTPHeader) {
+	if r.offsetSet.CompareAndSwap(false, true) {
+		var ms int64
+		if !r.sessionStart.IsZero() {
+			ms = time.Since(r.sessionStart).Milliseconds()
+			if ms < 0 {
+				ms = 0
+			}
+		}
+		r.startOffsetMs.Store(ms)
+		r.firstRtpTs.Store(hdr.Timestamp)
+	}
 }
 
 func (r *streamRecorder) write(hdr *RTPHeader, payload []byte) {
@@ -392,6 +417,7 @@ func (r *streamRecorder) write(hdr *RTPHeader, payload []byte) {
 	if r.closed {
 		return
 	}
+	r.markFirst(hdr)
 	switch r.codec {
 	case "vp8":
 		r.writeVP8(hdr, payload)
