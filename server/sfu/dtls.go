@@ -136,17 +136,17 @@ func keyAndSaltLen(p dtls.SRTPProtectionProfile) (int, int, error) {
 
 // extractSRTPKeys roda EKM e fatia conforme RFC 5764.
 func extractSRTPKeys(conn *dtls.Conn) (*SRTPKeyingMaterial, error) {
-	state, ok := conn.ConnectionState().ExportKeyingMaterial, conn.ConnectionState().SRTPProtectionProfile
-	if state == nil {
-		return nil, fmt.Errorf("dtls: ExportKeyingMaterial missing")
+	profile, ok := conn.SelectedSRTPProtectionProfile()
+	if !ok {
+		return nil, fmt.Errorf("dtls: no SRTP profile negotiated")
 	}
-	profile := dtls.SRTPProtectionProfile(ok)
 	keyLen, saltLen, err := keyAndSaltLen(profile)
 	if err != nil {
 		return nil, err
 	}
+	state := conn.ConnectionState()
 	total := 2*keyLen + 2*saltLen
-	material, err := state(dtlsKeyingMaterialLabel, nil, total)
+	material, err := state.ExportKeyingMaterial(dtlsKeyingMaterialLabel, nil, total)
 	if err != nil {
 		return nil, fmt.Errorf("ekm: %w", err)
 	}
