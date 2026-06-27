@@ -33,6 +33,9 @@ type Media struct {
 	RRIDExtID   uint8    // repaired-rtp-stream-id (RTX)
 	TWCCExtID   uint8    // transport-wide-cc seq (draft-holmer-01)
 	Extra       []string // linhas a:* que devolvemos verbatim
+}
+
+
 
 
 
