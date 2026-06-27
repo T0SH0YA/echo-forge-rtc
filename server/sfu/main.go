@@ -194,9 +194,9 @@ func (s *Server) handlePacket(raw []byte, from *net.UDPAddr) {
 			return
 		}
 		if IsRTCP(raw) {
-			rtcpIn.Add(1)
-			// RTCP forwarding/SRTCP entram numa próxima etapa (precisa de SRTCP
-			// frame com E-bit + index, distinto do SRTP). Por enquanto, conta e dropa.
+			if s.router != nil {
+				s.router.HandleRTCP(sess, raw)
+			}
 			return
 		}
 		if s.router != nil {
@@ -215,9 +215,10 @@ func (s *Server) statsLoop(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-t.C:
-			log.Printf("[sfu] stats stun_in=%d stun_out=%d dtls_in=%d dtls_ok=%d rtp_in=%d rtp_fwd=%d rtp_drop=%d",
+			log.Printf("[sfu] stats stun_in=%d stun_out=%d dtls_in=%d dtls_ok=%d rtp_in=%d rtp_fwd=%d rtp_drop=%d rtcp_in=%d rtcp_fwd=%d rtcp_fb=%d",
 				stunIn.Load(), stunOut.Load(), dtlsIn.Load(), dtlsHS.Load(),
-				rtpIn.Load(), rtpFwd.Load(), rtpDrop.Load())
+				rtpIn.Load(), rtpFwd.Load(), rtpDrop.Load(),
+				rtcpIn.Load(), rtcpFwd.Load(), rtcpFB.Load())
 		}
 	}
 }
