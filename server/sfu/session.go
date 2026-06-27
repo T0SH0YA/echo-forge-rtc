@@ -8,6 +8,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	dtls "github.com/pion/dtls/v2"
 )
 
 type ICEState int
@@ -16,6 +18,15 @@ const (
 	ICENew ICEState = iota
 	ICEChecking
 	ICEConnected
+)
+
+type DTLSState int
+
+const (
+	DTLSIdle DTLSState = iota
+	DTLSHandshaking
+	DTLSEstablished
+	DTLSFailed
 )
 
 func (s ICEState) String() string {
@@ -30,17 +41,27 @@ func (s ICEState) String() string {
 }
 
 type Session struct {
-	ID            string
-	LocalUfrag    string
-	LocalPwd      string
-	RemoteUfrag   string
-	RemotePwd     string
-	RemoteFinger  string // "sha-256 AA:BB:..." da offer
-	mu            sync.Mutex
-	remoteAddr    string // "ip:port" do par nomeado
-	state         ICEState
-	lastActivity  time.Time
-	useCandidate  bool
+	ID           string
+	LocalUfrag   string
+	LocalPwd     string
+	RemoteUfrag  string
+	RemotePwd    string
+	RemoteFinger string // "sha-256 AA:BB:..." da offer
+
+	// DTLS por sessão (Etapa 6)
+	LocalCert        *dtls.Certificate
+	LocalFingerprint string // "sha-256 AA:BB:..." do nosso cert
+	dtlsPipe         *dtlsPacketConn
+	dtlsConn         *dtls.Conn
+	dtlsState        DTLSState
+	srtpKeys         *SRTPKeyingMaterial
+
+	mu           sync.Mutex
+	remoteAddr   string // "ip:port" do par nomeado
+	state        ICEState
+	lastActivity time.Time
+	useCandidate bool
+	dtlsStarted  bool
 }
 
 func (s *Session) markChecking()        { s.mu.Lock(); s.state = ICEChecking; s.lastActivity = time.Now(); s.mu.Unlock() }
