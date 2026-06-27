@@ -94,18 +94,17 @@ func putID(w io.Writer, id uint32) error {
 	return err
 }
 
-// vintLen escolhe o menor nº de bytes (1..8) capaz de codificar v com
-// marker bit. Não usa o "all-ones" reservado pra unknown size.
+// vintBytes codifica v como VINT EBML usando o menor nº de bytes (1..8)
+// possível. Reserva o valor "all-ones" (unknown size) — não acontece em uso
+// normal porque os payloads são bem menores.
 func vintBytes(v uint64) []byte {
 	for n := 1; n <= 8; n++ {
-		max := uint64(1)<<(7*uint(n)) - 1
+		max := uint64(1)<<uint(7*n) - 1 // reservado: 2^(7n)-1
 		if v < max {
 			out := make([]byte, n)
-			binary.BigEndian.PutUint64(append(make([]byte, 8-n), out...), 0)
-			// monta com marker
 			tmp := v | (uint64(1) << uint(7*n))
 			for i := n - 1; i >= 0; i-- {
-				out[i] = byte(tmp)
+				out[i] = byte(tmp & 0xFF)
 				tmp >>= 8
 			}
 			return out
