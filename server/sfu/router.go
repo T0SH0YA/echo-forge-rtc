@@ -114,7 +114,10 @@ func (r *Router) getOrCreateJB(pub *Session, ssrc uint32) *JitterBuffer {
 	jb := NewJitterBuffer(ssrc,
 		func(hdr *RTPHeader, plain []byte) {
 			r.rtx.Put(hdr.SSRC, hdr.SequenceNumber, hdr.HeaderLen, plain)
+			// Etapa 16: tap de gravação (post-jitter, em ordem).
+			r.rec.On(pub, hdr, plain[hdr.HeaderLen:])
 			r.forward(pub, plain, hdr, ssrcLayer(pub, hdr.SSRC))
+
 		},
 		func(ssrc uint32, lost []uint16) {
 			r.sendNACKUpstream(pub, ssrc, lost)
