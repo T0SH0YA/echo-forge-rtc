@@ -140,13 +140,13 @@ func TestFullDTLSHandshake(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Aguarda ICE connected (handler é assíncrono e bindAddr é necessário pra
-	// roteador encontrar a sessão pelo addr do cliente).
+	// Aguarda ICE connected.
 	waitFor(t, time.Second, func() bool { return sess.State() == ICEConnected })
 
+	// Reseta deadline pra DTLS gerenciar.
+	_ = client.SetReadDeadline(time.Time{})
+
 	// 2) Dispara DTLS client (pion) usando o MESMO socket UDP do cliente.
-	//    Como nosso socket conversa só com serverAddr, embrulhamos com um
-	//    net.Conn "connected".
 	clientConn := &udpConnAdapter{pc: client, remote: serverAddr}
 
 	cfg := &dtls.Config{
