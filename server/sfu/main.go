@@ -165,7 +165,10 @@ func (s *Server) handleNewSession(w http.ResponseWriter, r *http.Request) {
 		RRIDExtID:        rridExt,
 		TWCCExtID:        twccExt,
 		OfferedRIDs:      rids,
+		PTCodec:          ptCodec,
+		PTClock:          ptClock,
 	}
+
 
 	s.sessions.Add(sess)
 
