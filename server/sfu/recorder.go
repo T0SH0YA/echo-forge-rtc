@@ -47,6 +47,14 @@ type TrackManifest struct {
 	Bytes     uint64 `json:"bytes"`
 	Width     uint16 `json:"width,omitempty"`
 	Height    uint16 `json:"height,omitempty"`
+	// StartOffsetMs: tempo entre o início da sessão (sr.startedAt) e o
+	// primeiro pacote desta trilha. Usado pelo mux pra A/V sync — o player
+	// vai posicionar o primeiro bloco da trilha exatamente nesse offset.
+	StartOffsetMs int64 `json:"startOffsetMs"`
+	// FirstRtpTs: timestamp RTP do primeiro pacote gravado, em ticks do
+	// próprio clock da trilha. Pareado com StartOffsetMs permite reconstruir
+	// timeline exata caso o mux precise relativizar a trilhas terceiras.
+	FirstRtpTs uint32 `json:"firstRtpTs,omitempty"`
 }
 
 // SessionManifest é o documento gravado em manifest.json.
@@ -317,7 +325,7 @@ func (h *RecorderHub) createStream(pub *Session, sr *sessionRec, ssrc uint32, co
 		}
 		recOpen.Add(1)
 		log.Printf("[rec] open vp8 ssrc=%d → %s", ssrc, path)
-		return &streamRecorder{codec: "vp8", ivf: iw, clock: clock, ssrc: ssrc, rid: rid, file: name, openedAt: time.Now().UTC()}
+		return &streamRecorder{codec: "vp8", ivf: iw, clock: clock, ssrc: ssrc, rid: rid, file: name, openedAt: time.Now().UTC(), sessionStart: sr.startedAt}
 	case "opus":
 		name := fmt.Sprintf("%d%s.ogg", ssrc, suffix)
 		path := filepath.Join(sr.dir, name)
@@ -333,7 +341,7 @@ func (h *RecorderHub) createStream(pub *Session, sr *sessionRec, ssrc uint32, co
 		}
 		recOpen.Add(1)
 		log.Printf("[rec] open opus ssrc=%d → %s", ssrc, path)
-		return &streamRecorder{codec: "opus", ogg: ow, clock: clock, ssrc: ssrc, rid: rid, file: name, openedAt: time.Now().UTC()}
+		return &streamRecorder{codec: "opus", ogg: ow, clock: clock, ssrc: ssrc, rid: rid, file: name, openedAt: time.Now().UTC(), sessionStart: sr.startedAt}
 	}
 	return nil
 }
@@ -348,6 +356,14 @@ type streamRecorder struct {
 	openedAt time.Time
 	closedAt time.Time
 	closed   bool
+
+	// Offset/sync (Etapa 19): primeira escrita determina o offset relativo
+	// ao início da sessão; persistido no manifesto pro mux pós-call alinhar
+	// vídeo e áudio na timeline real.
+	sessionStart  time.Time
+	offsetSet     atomic.Bool
+	startOffsetMs atomic.Int64
+	firstRtpTs    atomic.Uint32
 
 	frames atomic.Uint64
 	bytes  atomic.Uint64
@@ -371,11 +387,28 @@ func (r *streamRecorder) snapshot() *TrackManifest {
 		File: r.file, OpenedAt: ts(r.openedAt),
 		Frames: r.frames.Load(), Bytes: r.bytes.Load(),
 		Width: uint16(r.width.Load()), Height: uint16(r.height.Load()),
+		StartOffsetMs: r.startOffsetMs.Load(),
+		FirstRtpTs:    r.firstRtpTs.Load(),
 	}
 	if !r.closedAt.IsZero() {
 		t.ClosedAt = ts(r.closedAt)
 	}
 	return t
+}
+
+// markFirst registra offset relativo à sessão na primeira escrita.
+func (r *streamRecorder) markFirst(hdr *RTPHeader) {
+	if r.offsetSet.CompareAndSwap(false, true) {
+		var ms int64
+		if !r.sessionStart.IsZero() {
+			ms = time.Since(r.sessionStart).Milliseconds()
+			if ms < 0 {
+				ms = 0
+			}
+		}
+		r.startOffsetMs.Store(ms)
+		r.firstRtpTs.Store(hdr.Timestamp)
+	}
 }
 
 func (r *streamRecorder) write(hdr *RTPHeader, payload []byte) {
@@ -384,6 +417,7 @@ func (r *streamRecorder) write(hdr *RTPHeader, payload []byte) {
 	if r.closed {
 		return
 	}
+	r.markFirst(hdr)
 	switch r.codec {
 	case "vp8":
 		r.writeVP8(hdr, payload)

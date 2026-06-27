@@ -64,6 +64,13 @@ const (
 	idCluster      = 0x1F43B675
 	idTimecode     = 0xE7
 	idSimpleBlock  = 0xA3
+
+	idCues               = 0x1C53BB6B
+	idCuePoint           = 0xBB
+	idCueTime            = 0xB3
+	idCueTrackPositions  = 0xB7
+	idCueTrack           = 0xF7
+	idCueClusterPosition = 0xF1
 )
 
 // ===== EBML primitives =====
@@ -208,21 +215,48 @@ const (
 )
 
 type WebMWriter struct {
-	w io.Writer
+	w  io.Writer
+	cw *countWriter
 
 	hasVideo bool
 	hasAudio bool
+
+	segmentDataStart int64
 
 	curClusterStartMs int64
 	curClusterOpen    bool
 	pendingBlocks     []byte
 	maxTcMs           int64
+
+	// Cues (índice de seek). Uma entrada por cluster, apontando pra trilha
+	// de vídeo se presente, ou áudio quando audio-only.
+	cuePoints []cuePoint
+}
+
+type cuePoint struct {
+	tcMs     uint64
+	clusterPos uint64
+	track    uint8
+}
+
+// countWriter mantém o offset total escrito, pra calcular posições de
+// cluster relativas ao início do Segment (CueClusterPosition).
+type countWriter struct {
+	w io.Writer
+	n int64
+}
+
+func (c *countWriter) Write(p []byte) (int, error) {
+	n, err := c.w.Write(p)
+	c.n += int64(n)
+	return n, err
 }
 
 // NewWebMWriter abre EBML+Segment e escreve Tracks. videoW/H podem ser 0
 // (alguns players inferem do bitstream VP8).
 func NewWebMWriter(w io.Writer, hasVideo bool, vw, vh uint16, hasAudio bool, opusHead []byte, channels uint8) (*WebMWriter, error) {
-	ww := &WebMWriter{w: w, hasVideo: hasVideo, hasAudio: hasAudio}
+	cw := &countWriter{w: w}
+	ww := &WebMWriter{w: cw, cw: cw, hasVideo: hasVideo, hasAudio: hasAudio}
 
 	// EBML header
 	ebml := wrap(idEBML,
@@ -234,17 +268,19 @@ func NewWebMWriter(w io.Writer, hasVideo bool, vw, vh uint16, hasAudio bool, opu
 		putUint(idDocTypeVer, 4),
 		putUint(idDocTypeReadVer, 2),
 	)
-	if _, err := w.Write(ebml); err != nil {
+	if _, err := cw.Write(ebml); err != nil {
 		return nil, err
 	}
 
 	// Segment com unknown size (streaming-friendly).
-	if err := putID(w, idSegment); err != nil {
+	if err := putID(cw, idSegment); err != nil {
 		return nil, err
 	}
-	if _, err := w.Write(vintUnknown); err != nil {
+	if _, err := cw.Write(vintUnknown); err != nil {
 		return nil, err
 	}
+	// Tudo daqui pra frente conta como "Segment data" pras posições de Cue.
+	ww.segmentDataStart = cw.n
 
 	// Info
 	info := wrap(idInfo,
@@ -252,7 +288,7 @@ func NewWebMWriter(w io.Writer, hasVideo bool, vw, vh uint16, hasAudio bool, opu
 		putString(idMuxingApp, softwareName),
 		putString(idWritingApp, softwareName),
 	)
-	if _, err := w.Write(info); err != nil {
+	if _, err := cw.Write(info); err != nil {
 		return nil, err
 	}
 
@@ -290,7 +326,7 @@ func NewWebMWriter(w io.Writer, hasVideo bool, vw, vh uint16, hasAudio bool, opu
 		entries = append(entries, te)
 	}
 	tracks := wrap(idTracks, entries...)
-	if _, err := w.Write(tracks); err != nil {
+	if _, err := cw.Write(tracks); err != nil {
 		return nil, err
 	}
 	return ww, nil
@@ -357,6 +393,15 @@ func (ww *WebMWriter) flushCluster() error {
 	body := make([]byte, 0, len(tc)+len(ww.pendingBlocks))
 	body = append(body, tc...)
 	body = append(body, ww.pendingBlocks...)
+	// Cue: posição do cluster relativa ao início do Segment data.
+	pos := ww.cw.n - ww.segmentDataStart
+	cueTrack := uint8(trackVideo)
+	if !ww.hasVideo {
+		cueTrack = trackAudio
+	}
+	ww.cuePoints = append(ww.cuePoints, cuePoint{
+		tcMs: uint64(ww.curClusterStartMs), clusterPos: uint64(pos), track: cueTrack,
+	})
 	if err := putElem(ww.w, idCluster, body); err != nil {
 		return err
 	}
@@ -366,5 +411,25 @@ func (ww *WebMWriter) flushCluster() error {
 }
 
 func (ww *WebMWriter) Close() error {
-	return ww.flushCluster()
+	if err := ww.flushCluster(); err != nil {
+		return err
+	}
+	if len(ww.cuePoints) == 0 {
+		return nil
+	}
+	// Cues element no fim do Segment (válido em WebM/Matroska).
+	var cuePts [][]byte
+	for _, cp := range ww.cuePoints {
+		positions := wrap(idCueTrackPositions,
+			putUint(idCueTrack, uint64(cp.track)),
+			putUint(idCueClusterPosition, cp.clusterPos),
+		)
+		cuePts = append(cuePts, wrap(idCuePoint,
+			putUint(idCueTime, cp.tcMs),
+			positions,
+		))
+	}
+	cues := wrap(idCues, cuePts...)
+	_, err := ww.cw.Write(cues)
+	return err
 }
