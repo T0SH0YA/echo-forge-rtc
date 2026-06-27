@@ -34,6 +34,7 @@ type Server struct {
 	publicIP string
 	udpPort  int
 	sessions *SessionStore
+	router   *Router
 }
 
 var (
