@@ -326,7 +326,7 @@ func NewWebMWriter(w io.Writer, hasVideo bool, vw, vh uint16, hasAudio bool, opu
 		entries = append(entries, te)
 	}
 	tracks := wrap(idTracks, entries...)
-	if _, err := w.Write(tracks); err != nil {
+	if _, err := cw.Write(tracks); err != nil {
 		return nil, err
 	}
 	return ww, nil
