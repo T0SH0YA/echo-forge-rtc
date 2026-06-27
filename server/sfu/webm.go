@@ -215,21 +215,48 @@ const (
 )
 
 type WebMWriter struct {
-	w io.Writer
+	w  io.Writer
+	cw *countWriter
 
 	hasVideo bool
 	hasAudio bool
+
+	segmentDataStart int64
 
 	curClusterStartMs int64
 	curClusterOpen    bool
 	pendingBlocks     []byte
 	maxTcMs           int64
+
+	// Cues (índice de seek). Uma entrada por cluster, apontando pra trilha
+	// de vídeo se presente, ou áudio quando audio-only.
+	cuePoints []cuePoint
+}
+
+type cuePoint struct {
+	tcMs     uint64
+	clusterPos uint64
+	track    uint8
+}
+
+// countWriter mantém o offset total escrito, pra calcular posições de
+// cluster relativas ao início do Segment (CueClusterPosition).
+type countWriter struct {
+	w io.Writer
+	n int64
+}
+
+func (c *countWriter) Write(p []byte) (int, error) {
+	n, err := c.w.Write(p)
+	c.n += int64(n)
+	return n, err
 }
 
 // NewWebMWriter abre EBML+Segment e escreve Tracks. videoW/H podem ser 0
 // (alguns players inferem do bitstream VP8).
 func NewWebMWriter(w io.Writer, hasVideo bool, vw, vh uint16, hasAudio bool, opusHead []byte, channels uint8) (*WebMWriter, error) {
-	ww := &WebMWriter{w: w, hasVideo: hasVideo, hasAudio: hasAudio}
+	cw := &countWriter{w: w}
+	ww := &WebMWriter{w: cw, cw: cw, hasVideo: hasVideo, hasAudio: hasAudio}
 
 	// EBML header
 	ebml := wrap(idEBML,
