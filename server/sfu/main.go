@@ -165,7 +165,6 @@ func (s *Server) udpLoop() {
 }
 
 func (s *Server) handlePacket(raw []byte, from *net.UDPAddr) {
-	log.Printf("[sfu] pkt from=%s len=%d b0=%d stun=%v dtls=%v", from, len(raw), raw[0], IsSTUN(raw), IsDTLS(raw))
 	switch {
 	case IsSTUN(raw):
 		stunIn.Add(1)
@@ -179,19 +178,18 @@ func (s *Server) handlePacket(raw []byte, from *net.UDPAddr) {
 		dtlsIn.Add(1)
 		sess := s.sessions.ByAddr(from.String())
 		if sess == nil {
-			log.Printf("[sfu] dtls drop no-session from=%s", from)
 			return
 		}
 		sess.mu.Lock()
 		pipe := sess.dtlsPipe
 		sess.mu.Unlock()
 		if pipe != nil {
-			log.Printf("[sfu] dtls push from=%s len=%d", from, len(raw))
 			pipe.Push(raw)
-		} else {
-			log.Printf("[sfu] dtls drop no-pipe from=%s", from)
 		}
 	default:
+		// SRTP/RTCP entram na Etapa 7.
+	}
+}
 		// SRTP/RTCP entram na Etapa 7.
 	}
 }
