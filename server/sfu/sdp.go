@@ -32,8 +32,11 @@ type Media struct {
 	RIDExtID    uint8    // ID extmap pra urn:ietf:…:rtp-stream-id (0 = ausente)
 	RRIDExtID   uint8    // repaired-rtp-stream-id (RTX)
 	TWCCExtID   uint8    // transport-wide-cc seq (draft-holmer-01)
+	Rtpmap      map[uint8]string // PT → nome de codec lowercase ("vp8","opus","h264","rtx")
+	ClockRate   map[uint8]uint32 // PT → clock rate (Hz)
 	Extra       []string // linhas a:* que devolvemos verbatim
 }
+
 
 
 
