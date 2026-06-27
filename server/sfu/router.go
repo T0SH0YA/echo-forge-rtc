@@ -246,11 +246,14 @@ func (r *Router) forward(from *Session, plain []byte, hdr *RTPHeader, layer stri
 		outPlain := plain
 		var twccSeq uint16
 		twccRewritten := false
-		if subTwccID > 0 {
-			twccSeq = sub.nextSubTwccSeq()
-			outPlain = CloneRTPAndRewriteTWCC(plain, hdr, subTwccID, twccSeq)
-			twccRewritten = outPlain != nil && len(outPlain) >= hdr.HeaderLen && outPlain[0] != 0
-			twccRewritten = subTwccID > 0
+		if subTwccID > 0 && hdr.Extension {
+			candidateSeq := sub.nextSubTwccSeq()
+			rewritten := CloneRTPAndRewriteTWCC(plain, hdr, subTwccID, candidateSeq)
+			if &rewritten[0] != &plain[0] { // realmente clonou (ext encontrada)
+				outPlain = rewritten
+				twccSeq = candidateSeq
+				twccRewritten = true
+			}
 		}
 		out, err := send.Encrypt(outPlain, hdr.HeaderLen, ssrc, seq)
 		if err != nil {
