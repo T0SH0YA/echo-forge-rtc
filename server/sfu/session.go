@@ -57,8 +57,12 @@ type Session struct {
 	dtlsConn         *dtls.Conn
 	dtlsState        DTLSState
 	srtpKeys         *SRTPKeyingMaterial
-	srtpRecv         *SRTPContext // decifra o que vem do peer (ClientKey/ClientSalt)
-	srtpSend         *SRTPContext // cifra o que mandamos pro peer (ServerKey/ServerSalt)
+	srtpRecv         *SRTPContext  // decifra RTP do peer (ClientKey/ClientSalt)
+	srtpSend         *SRTPContext  // cifra RTP pro peer (ServerKey/ServerSalt)
+	srtcpRecv        *SRTCPContext // decifra RTCP do peer (mesmas chaves SRTP)
+	srtcpSend        *SRTCPContext // cifra RTCP pro peer
+
+	publishedSSRCs map[uint32]bool // SSRCs que vimos publicar — mantém set
 
 	mu           sync.Mutex
 	remoteAddr   string // "ip:port" do par nomeado
