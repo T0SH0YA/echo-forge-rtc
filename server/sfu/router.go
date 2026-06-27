@@ -335,8 +335,9 @@ func (r *Router) HandleRTCP(from *Session, raw []byte) {
 		return
 	}
 	// Agrupa feedback por owner pra enviar um compound por destino.
-	// NACKs são CONSUMIDOS localmente via RTX cache; só PLI/transport-cc/etc.
-	// sobem pro publisher.
+	// NACKs CONSUMIDOS localmente via RTX cache; transport-cc CONSUMIDO
+	// localmente pra alimentar o BWE downstream (não sobe pro publisher).
+	// PLI/FIR/REMB sobem.
 	byOwner := map[*Session][]RTCPPacket{}
 	for _, p := range pkts {
 		if !p.IsFeedback() {
@@ -344,6 +345,16 @@ func (r *Router) HandleRTCP(from *Session, raw []byte) {
 		}
 		if p.IsNACK() {
 			r.answerNACK(from, p)
+			continue
+		}
+		if p.IsTransportCC() {
+			if _, _, arrivals, err := ParseTWCCFeedback(p); err == nil {
+				from.mu.Lock()
+				bwe := from.subBWE
+				from.mu.Unlock()
+				bwe.OnFeedback(arrivals)
+				twccRecv.Add(1)
+			}
 			continue
 		}
 		r.mu.RLock()
