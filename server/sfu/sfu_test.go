@@ -42,7 +42,7 @@ func TestSDPParseAndAnswer(t *testing.T) {
 	}
 	ans := BuildAnswer(off, AnswerParams{
 		IceUfrag: "xyz1", IcePwd: "passpasspasspasspasspass",
-		Fingerprint: placeholderFingerprint, HostIP: "1.2.3.4", HostPort: 7000,
+		Fingerprint: "sha-256 AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99", HostIP: "1.2.3.4", HostPort: 7000,
 	})
 	for _, want := range []string{
 		"a=ice-lite",
