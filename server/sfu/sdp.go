@@ -226,12 +226,26 @@ func BuildAnswer(offer *SessionDesc, p AnswerParams) string {
 				fmt.Fprintf(&b, "a=%s\r\n", ex)
 			}
 		}
+		// Espelhamos rid/simulcast: publisher manda send q;h;f → answer
+		// devolve recv q;h;f e a=rid:<id> recv pra cada camada.
+		for _, rid := range m.RIDs {
+			fmt.Fprintf(&b, "a=rid:%s recv\r\n", rid)
+		}
+		if m.Simulcast != "" {
+			// "send q;h;f" → "recv q;h;f"
+			sc := m.Simulcast
+			if strings.HasPrefix(sc, "send ") {
+				sc = "recv " + strings.TrimPrefix(sc, "send ")
+			}
+			fmt.Fprintf(&b, "a=simulcast:%s\r\n", sc)
+		}
 		// Candidato host único (UDP).
 		fmt.Fprintf(&b, "a=candidate:1 1 UDP 2130706431 %s %d typ host\r\n", p.HostIP, p.HostPort)
 		b.WriteString("a=end-of-candidates\r\n")
 	}
 	return b.String()
 }
+
 
 func startsWithAny(s string, ps ...string) bool {
 	for _, p := range ps {
