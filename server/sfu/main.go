@@ -227,6 +227,8 @@ func (s *Server) handleSessionSub(w http.ResponseWriter, r *http.Request) {
 		s.handleRecordStop(w, r, id)
 	case "record":
 		s.handleRecordGet(w, r, id)
+	case "record/mux":
+		s.handleRecordMux(w, r, id)
 	default:
 		http.NotFound(w, r)
 	}
@@ -293,6 +295,24 @@ func (s *Server) handleRecordGet(w http.ResponseWriter, r *http.Request, id stri
 		return
 	}
 	writeManifest(w, s.router.rec, id)
+}
+
+func (s *Server) handleRecordMux(w http.ResponseWriter, r *http.Request, id string) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method", http.StatusMethodNotAllowed)
+		return
+	}
+	if !s.router.rec.Enabled() {
+		http.Error(w, "recorder disabled (set SFU_RECORD_DIR)", http.StatusServiceUnavailable)
+		return
+	}
+	path, err := s.router.rec.MuxSession(id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{"ok": true, "file": path})
 }
 
 func writeManifest(w http.ResponseWriter, h *RecorderHub, id string) {
