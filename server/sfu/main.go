@@ -34,6 +34,7 @@ type Server struct {
 	publicIP string
 	udpPort  int
 	sessions *SessionStore
+	router   *Router
 }
 
 var (
@@ -58,6 +59,7 @@ func main() {
 	port := udp.LocalAddr().(*net.UDPAddr).Port
 
 	srv := &Server{udp: udp, publicIP: publicIP, udpPort: port, sessions: newSessionStore()}
+	srv.router = NewRouter(udp)
 	log.Printf("[sfu] http=%s udp=%s public=%s:%d", httpAddr, udp.LocalAddr(), publicIP, port)
 
 	mux := http.NewServeMux()
@@ -186,8 +188,22 @@ func (s *Server) handlePacket(raw []byte, from *net.UDPAddr) {
 		if pipe != nil {
 			pipe.Push(raw)
 		}
+	case IsRTPOrRTCP(raw):
+		sess := s.sessions.ByAddr(from.String())
+		if sess == nil {
+			return
+		}
+		if IsRTCP(raw) {
+			rtcpIn.Add(1)
+			// RTCP forwarding/SRTCP entram numa próxima etapa (precisa de SRTCP
+			// frame com E-bit + index, distinto do SRTP). Por enquanto, conta e dropa.
+			return
+		}
+		if s.router != nil {
+			s.router.HandleRTP(sess, raw)
+		}
 	default:
-		// SRTP/RTCP entram na Etapa 7.
+		// Outros bytes (TURN ChannelData) não aplicam aqui.
 	}
 }
 
@@ -199,7 +215,9 @@ func (s *Server) statsLoop(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-t.C:
-			log.Printf("[sfu] stats stun_in=%d stun_out=%d dtls_in=%d dtls_ok=%d", stunIn.Load(), stunOut.Load(), dtlsIn.Load(), dtlsHS.Load())
+			log.Printf("[sfu] stats stun_in=%d stun_out=%d dtls_in=%d dtls_ok=%d rtp_in=%d rtp_fwd=%d rtp_drop=%d",
+				stunIn.Load(), stunOut.Load(), dtlsIn.Load(), dtlsHS.Load(),
+				rtpIn.Load(), rtpFwd.Load(), rtpDrop.Load())
 		}
 	}
 }

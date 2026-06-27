@@ -89,11 +89,15 @@ Tudo vive **neste repositório**, em pastas separadas. Lovable é nosso editor +
 - [x] Engine: pion/dtls v2 (MIT). Cert gen, fingerprint, verificação e EKM são código nosso.
 - [x] Testes E2E: fingerprint format/match + handshake real (pion como cliente) → DTLSEstablished + keys extraídas
 
-### Etapa 7 — SFU: SRTP + forwarding básico
-- SRTP AES-128-GCM (RFC 7714): cifra/decifra, replay window
-- Parser RTP/RTCP
-- Forwarding 1→N de uma track de vídeo + áudio sem inspeção
-- Playground vira sala multipartícipe básica
+### Etapa 7 — SFU: SRTP + forwarding 1→N ✅
+- [x] Parser RTP (`rtp.go`): header + CSRCs + header extension, calcula `HeaderLen` pra separar AAD do payload; demux RFC 7983 (`IsRTPOrRTCP`, `IsRTCP` via PT∈[64,95] da RFC 5761)
+- [x] SRTP AES-128-GCM (`srtp.go`, RFC 7714): IV = salt XOR (00 00‖SSRC‖ROC‖SEQ), AAD = RTP header, Seal/Open com tag 16B; tracking ROC per-SSRC com detecção de wrap
+- [x] Contextos por sessão: `srtpRecv` = ClientKey/ClientSalt (decifra publisher), `srtpSend` = ServerKey/ServerSalt (cifra pra subscriber); inicializados quando DTLS estabelece
+- [x] Router 1→N (`router.go`): decifra com contexto do publisher, re-cifra com contexto de cada subscriber preservando SSRC/SEQ, envia pelo socket UDP único
+- [x] Demux UDP atualizado: STUN | DTLS | RTP→router | RTCP (contado, forwarding em etapa futura)
+- [x] Stats expostas: rtp_in / rtp_fwd / rtp_drop
+- [x] Testes: roundtrip GCM, rejeição de pacote adulterado (auth tag), wrap de ROC, forwarding 1→2 com decifragem por chaves distintas em cada subscriber, demux RTP vs RTCP vs STUN
+- [ ] SRTCP (E-bit + index distinto), AES-CM+HMAC-SHA1 fallback, simulcast/SVC: etapas seguintes
 
 ### Etapa 8 — SFU: feedback e qualidade
 - RTCP: NACK + RTX (retransmissão), PLI/FIR (keyframe request), receiver reports

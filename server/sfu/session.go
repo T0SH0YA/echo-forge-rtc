@@ -57,6 +57,8 @@ type Session struct {
 	dtlsConn         *dtls.Conn
 	dtlsState        DTLSState
 	srtpKeys         *SRTPKeyingMaterial
+	srtpRecv         *SRTPContext // decifra o que vem do peer (ClientKey/ClientSalt)
+	srtpSend         *SRTPContext // cifra o que mandamos pro peer (ServerKey/ServerSalt)
 
 	mu           sync.Mutex
 	remoteAddr   string // "ip:port" do par nomeado
