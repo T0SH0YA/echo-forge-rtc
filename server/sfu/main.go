@@ -190,9 +190,6 @@ func (s *Server) handlePacket(raw []byte, from *net.UDPAddr) {
 		// SRTP/RTCP entram na Etapa 7.
 	}
 }
-		// SRTP/RTCP entram na Etapa 7.
-	}
-}
 
 func (s *Server) statsLoop(ctx context.Context) {
 	t := time.NewTicker(30 * time.Second)
