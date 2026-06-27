@@ -268,17 +268,19 @@ func NewWebMWriter(w io.Writer, hasVideo bool, vw, vh uint16, hasAudio bool, opu
 		putUint(idDocTypeVer, 4),
 		putUint(idDocTypeReadVer, 2),
 	)
-	if _, err := w.Write(ebml); err != nil {
+	if _, err := cw.Write(ebml); err != nil {
 		return nil, err
 	}
 
 	// Segment com unknown size (streaming-friendly).
-	if err := putID(w, idSegment); err != nil {
+	if err := putID(cw, idSegment); err != nil {
 		return nil, err
 	}
-	if _, err := w.Write(vintUnknown); err != nil {
+	if _, err := cw.Write(vintUnknown); err != nil {
 		return nil, err
 	}
+	// Tudo daqui pra frente conta como "Segment data" pras posições de Cue.
+	ww.segmentDataStart = cw.n
 
 	// Info
 	info := wrap(idInfo,
@@ -286,7 +288,7 @@ func NewWebMWriter(w io.Writer, hasVideo bool, vw, vh uint16, hasAudio bool, opu
 		putString(idMuxingApp, softwareName),
 		putString(idWritingApp, softwareName),
 	)
-	if _, err := w.Write(info); err != nil {
+	if _, err := cw.Write(info); err != nil {
 		return nil, err
 	}
 
