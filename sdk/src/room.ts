@@ -1,3 +1,4 @@
+import { DataChannel, type DataChannelOptions } from "./data-channel";
 import { Emitter } from "./emitter";
 import { PeerLink } from "./peer-link";
 import { LocalTrack, RemoteTrack } from "./track";
@@ -15,7 +16,10 @@ interface RoomEvents extends Record<string, unknown> {
   "peer-left": { peerId: string };
   "track-subscribed": { peer: RemotePeer; track: RemoteTrack; stream: MediaStream };
   "track-unsubscribed": { peer: RemotePeer; track: RemoteTrack };
+  "data-channel": { peerId: string; channel: DataChannel };
+  data: { peerId: string; label: string; payload: string | ArrayBuffer | Blob };
   "connection-state": ConnectionState;
+  "peer-connection-state": { peerId: string; state: RTCPeerConnectionState };
   error: Error;
 }
 
@@ -137,6 +141,15 @@ export class Room extends Emitter<RoomEvents> {
         if (!peer) return;
         peer.tracks.delete(track.id);
         this.emit("track-unsubscribed", { peer, track });
+      },
+      onDataChannel: (channel) => {
+        this.emit("data-channel", { peerId: remoteId, channel });
+        channel.on("message", ({ data }) => {
+          this.emit("data", { peerId: remoteId, label: channel.label, payload: data });
+        });
+      },
+      onConnectionStateChange: (state) => {
+        this.emit("peer-connection-state", { peerId: remoteId, state });
       },
     });
     this.links.set(remoteId, link);
