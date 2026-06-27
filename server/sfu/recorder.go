@@ -47,6 +47,14 @@ type TrackManifest struct {
 	Bytes     uint64 `json:"bytes"`
 	Width     uint16 `json:"width,omitempty"`
 	Height    uint16 `json:"height,omitempty"`
+	// StartOffsetMs: tempo entre o início da sessão (sr.startedAt) e o
+	// primeiro pacote desta trilha. Usado pelo mux pra A/V sync — o player
+	// vai posicionar o primeiro bloco da trilha exatamente nesse offset.
+	StartOffsetMs int64 `json:"startOffsetMs"`
+	// FirstRtpTs: timestamp RTP do primeiro pacote gravado, em ticks do
+	// próprio clock da trilha. Pareado com StartOffsetMs permite reconstruir
+	// timeline exata caso o mux precise relativizar a trilhas terceiras.
+	FirstRtpTs uint32 `json:"firstRtpTs,omitempty"`
 }
 
 // SessionManifest é o documento gravado em manifest.json.
