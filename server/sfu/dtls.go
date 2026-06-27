@@ -173,16 +173,16 @@ func runDTLSServer(ctx context.Context, pipe *dtlsPacketConn, cert *tls.Certific
 		SRTPProtectionProfiles: srtpProfiles,
 		ClientAuth:             dtls.RequireAnyClientCert,
 		ExtendedMasterSecret:   dtls.RequireExtendedMasterSecret,
-		// Validação real do fingerprint é nossa, abaixo. A função aqui evita que
-		// o pion rejeite o cert por "unknown CA".
-		InsecureSkipVerify: true,
+		InsecureSkipVerify:     true,
 		VerifyPeerCertificate: func(rawCerts [][]byte, _ [][]*x509.Certificate) error {
 			if len(rawCerts) == 0 {
 				return fmt.Errorf("dtls: peer sent no cert")
 			}
 			return matchFingerprint(remoteFingerprint, rawCerts[0])
 		},
+		LoggerFactory: dtlsLog,
 	}
+	log.Printf("[sfu] dtls server starting handshake remote=%s", pipe.RemoteAddr())
 	hsCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 	conn, err := dtls.ServerWithContext(hsCtx, pipe, cfg)
