@@ -162,7 +162,7 @@ func (h *RecorderHub) MuxSession(sessionID string) (string, error) {
 			if len(p.Data) == 0 {
 				continue
 			}
-			blocks = append(blocks, block{ts: tsMs, track: trackAudio, keyframe: true, data: p.Data})
+			blocks = append(blocks, block{ts: tsMs + audOff, track: trackAudio, keyframe: true, data: p.Data})
 		}
 		f.Close()
 	}
