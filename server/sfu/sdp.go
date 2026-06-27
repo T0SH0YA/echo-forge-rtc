@@ -18,17 +18,22 @@ import (
 )
 
 type Media struct {
-	Kind       string // "audio" | "video" | "application"
-	Mid        string
-	Protocol   string   // ex: "UDP/TLS/RTP/SAVPF"
-	Fmts       []string // payload types
-	Direction  string   // "sendrecv" | "recvonly" | "sendonly" | "inactive"
-	Setup      string
-	IceUfrag   string
-	IcePwd     string
+	Kind        string // "audio" | "video" | "application"
+	Mid         string
+	Protocol    string   // ex: "UDP/TLS/RTP/SAVPF"
+	Fmts        []string // payload types
+	Direction   string   // "sendrecv" | "recvonly" | "sendonly" | "inactive"
+	Setup       string
+	IceUfrag    string
+	IcePwd      string
 	Fingerprint string
-	Extra      []string // linhas a:* que devolvemos verbatim
+	RIDs        []string // a=rid:<id> send … (publisher anuncia camadas)
+	Simulcast   string   // valor cru de a=simulcast (ex: "send q;h;f")
+	RIDExtID    uint8    // ID extmap pra urn:ietf:…:rtp-stream-id (0 = ausente)
+	RRIDExtID   uint8    // repaired-rtp-stream-id (RTX)
+	Extra       []string // linhas a:* que devolvemos verbatim
 }
+
 
 type SessionDesc struct {
 	Origin      string
