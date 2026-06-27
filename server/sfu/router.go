@@ -27,6 +27,8 @@ var (
 	rtcpIn  atomic.Uint64
 	rtcpFwd atomic.Uint64
 	rtcpFB  atomic.Uint64
+	rtxHit  atomic.Uint64
+	rtxMiss atomic.Uint64
 )
 
 type Router struct {
@@ -35,10 +37,11 @@ type Router struct {
 	mu   sync.RWMutex
 	ses  map[string]*Session // sessionID → session
 	ssrc map[uint32]*Session // mediaSSRC → publisher session
+	rtx  *RTXCache
 }
 
 func NewRouter(udp *net.UDPConn) *Router {
-	return &Router{udp: udp, ses: map[string]*Session{}, ssrc: map[uint32]*Session{}}
+	return &Router{udp: udp, ses: map[string]*Session{}, ssrc: map[uint32]*Session{}, rtx: NewRTXCache()}
 }
 
 func (r *Router) Add(s *Session) {
