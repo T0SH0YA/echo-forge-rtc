@@ -225,9 +225,14 @@ func (r *Router) HandleRTP(from *Session, raw []byte) {
 		}
 	}
 
-	r.rtx.Put(hdr.SSRC, hdr.SequenceNumber, hdr.HeaderLen, plain)
-	r.forward(from, plain, hdr, ssrcLayer(from, hdr.SSRC))
+	// Etapa 15: passa pelo jitter buffer (reorder + NACK upstream em gap).
+	// Cópia do plaintext porque o decrypt reaproveita o buffer recebido.
+	plainCopy := make([]byte, len(plain))
+	copy(plainCopy, plain)
+	jb := r.getOrCreateJB(from, hdr.SSRC)
+	jb.Push(hdr, plainCopy)
 }
+
 
 // ssrcLayer evita chamar layerOfSSRC duas vezes (router já chamou via from).
 func ssrcLayer(s *Session, ssrc uint32) string { return s.layerOfSSRC(ssrc) }
