@@ -129,8 +129,11 @@ func (s *Server) handleNewSession(w http.ResponseWriter, r *http.Request) {
 	fp := FingerprintSHA256(cert.Certificate[0])
 
 	// Pega RIDExtID/TWCCExtID e RIDs do primeiro m-line de vídeo.
+	// Agrega PT→codec de TODOS os m-lines (BUNDLE: PTs são únicos).
 	var ridExt, rridExt, twccExt uint8
 	var rids []string
+	ptCodec := map[uint8]string{}
+	ptClock := map[uint8]uint32{}
 	for _, m := range offer.Media {
 		if m.TWCCExtID != 0 && twccExt == 0 {
 			twccExt = m.TWCCExtID
@@ -140,7 +143,14 @@ func (s *Server) handleNewSession(w http.ResponseWriter, r *http.Request) {
 			rridExt = m.RRIDExtID
 			rids = m.RIDs
 		}
+		for pt, name := range m.Rtpmap {
+			ptCodec[pt] = name
+		}
+		for pt, clk := range m.ClockRate {
+			ptClock[pt] = clk
+		}
 	}
+
 
 	sess := &Session{
 		ID:               uuid.NewString(),
@@ -155,7 +165,10 @@ func (s *Server) handleNewSession(w http.ResponseWriter, r *http.Request) {
 		RRIDExtID:        rridExt,
 		TWCCExtID:        twccExt,
 		OfferedRIDs:      rids,
+		PTCodec:          ptCodec,
+		PTClock:          ptClock,
 	}
+
 
 	s.sessions.Add(sess)
 

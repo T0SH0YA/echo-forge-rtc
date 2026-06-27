@@ -32,8 +32,11 @@ type Media struct {
 	RIDExtID    uint8    // ID extmap pra urn:ietf:…:rtp-stream-id (0 = ausente)
 	RRIDExtID   uint8    // repaired-rtp-stream-id (RTX)
 	TWCCExtID   uint8    // transport-wide-cc seq (draft-holmer-01)
+	Rtpmap      map[uint8]string // PT → nome de codec lowercase ("vp8","opus","h264","rtx")
+	ClockRate   map[uint8]uint32 // PT → clock rate (Hz)
 	Extra       []string // linhas a:* que devolvemos verbatim
 }
+
 
 
 
@@ -167,12 +170,52 @@ func parseAttr(s *SessionDesc, m *Media, v string) {
 			}
 			m.Extra = append(m.Extra, v)
 		}
+	case "rtpmap":
+		// "rtpmap:<PT> <name>/<clock>[/<params>]"
+		if m != nil {
+			ptStr, rest, ok := strings.Cut(val, " ")
+			if ok {
+				var pt uint8
+				bad := false
+				for _, c := range ptStr {
+					if c < '0' || c > '9' {
+						bad = true
+						break
+					}
+					pt = pt*10 + uint8(c-'0')
+				}
+				if !bad {
+					name, clockStr, _ := strings.Cut(rest, "/")
+					if slash := strings.IndexByte(clockStr, '/'); slash >= 0 {
+						clockStr = clockStr[:slash]
+					}
+					var clock uint32
+					for _, c := range clockStr {
+						if c < '0' || c > '9' {
+							clock = 0
+							break
+						}
+						clock = clock*10 + uint32(c-'0')
+					}
+					if m.Rtpmap == nil {
+						m.Rtpmap = map[uint8]string{}
+						m.ClockRate = map[uint8]uint32{}
+					}
+					m.Rtpmap[pt] = strings.ToLower(strings.TrimSpace(name))
+					m.ClockRate[pt] = clock
+				}
+			}
+		}
+		if m != nil {
+			m.Extra = append(m.Extra, v)
+		}
 	default:
 		if m != nil {
 			m.Extra = append(m.Extra, v)
 		}
 	}
 }
+
 
 
 // AnswerParams: o que o servidor anuncia.

@@ -49,11 +49,15 @@ type Router struct {
 	// Etapa 15: jitter buffer por (publisher, ssrc). Chave string = sessionID|ssrc.
 	jbMu sync.Mutex
 	jbs  map[string]*JitterBuffer
+
+	// Etapa 16: gravação opcional (SFU_RECORD_DIR).
+	rec *RecorderHub
 }
 
 func NewRouter(udp *net.UDPConn) *Router {
-	return &Router{udp: udp, ses: map[string]*Session{}, ssrc: map[uint32]*Session{}, rtx: NewRTXCache(), jbs: map[string]*JitterBuffer{}}
+	return &Router{udp: udp, ses: map[string]*Session{}, ssrc: map[uint32]*Session{}, rtx: NewRTXCache(), jbs: map[string]*JitterBuffer{}, rec: NewRecorderHub()}
 }
+
 
 
 func (r *Router) Add(s *Session) {
@@ -71,8 +75,10 @@ func (r *Router) Remove(id string) {
 			if owner == s {
 				delete(r.ssrc, ssrc)
 				r.closeJB(id, ssrc)
+				r.rec.CloseSSRC(id, ssrc)
 			}
 		}
+
 	}
 }
 
@@ -108,7 +114,10 @@ func (r *Router) getOrCreateJB(pub *Session, ssrc uint32) *JitterBuffer {
 	jb := NewJitterBuffer(ssrc,
 		func(hdr *RTPHeader, plain []byte) {
 			r.rtx.Put(hdr.SSRC, hdr.SequenceNumber, hdr.HeaderLen, plain)
+			// Etapa 16: tap de gravação (post-jitter, em ordem).
+			r.rec.On(pub, hdr, plain[hdr.HeaderLen:])
 			r.forward(pub, plain, hdr, ssrcLayer(pub, hdr.SSRC))
+
 		},
 		func(ssrc uint32, lost []uint16) {
 			r.sendNACKUpstream(pub, ssrc, lost)
