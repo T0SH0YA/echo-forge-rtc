@@ -71,6 +71,9 @@ type Session struct {
 	OfferedRIDs []string        // camadas anunciadas em a=rid:<id> send
 	layerSSRC map[string]uint32 // rid → ssrc descoberto via header ext
 	ssrcLayer map[uint32]string // ssrc → rid (inverso)
+	PTCodec   map[uint8]string  // PT → codec lowercase (Etapa 16: gravação)
+	PTClock   map[uint8]uint32  // PT → clock rate
+
 
 	// TWCC + BWE (Etapa 13)
 	twcc       *TWCCRecorder
