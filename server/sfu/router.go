@@ -70,10 +70,80 @@ func (r *Router) Remove(id string) {
 		for ssrc, owner := range r.ssrc {
 			if owner == s {
 				delete(r.ssrc, ssrc)
+				r.closeJB(id, ssrc)
 			}
 		}
 	}
 }
+
+func jbKey(sessID string, ssrc uint32) string {
+	b := make([]byte, 0, len(sessID)+12)
+	b = append(b, sessID...)
+	b = append(b, '|')
+	b = append(b, byte(ssrc>>24), byte(ssrc>>16), byte(ssrc>>8), byte(ssrc))
+	return string(b)
+}
+
+func (r *Router) closeJB(sessID string, ssrc uint32) {
+	r.jbMu.Lock()
+	k := jbKey(sessID, ssrc)
+	if jb, ok := r.jbs[k]; ok {
+		delete(r.jbs, k)
+		r.jbMu.Unlock()
+		jb.Close()
+		return
+	}
+	r.jbMu.Unlock()
+}
+
+// getOrCreateJB devolve o JB pra (publisher, ssrc), criando se necessário.
+// O emit chama forward+rtx; o nack envia RTPFB-NACK cifrado pro publisher.
+func (r *Router) getOrCreateJB(pub *Session, ssrc uint32) *JitterBuffer {
+	k := jbKey(pub.ID, ssrc)
+	r.jbMu.Lock()
+	if jb, ok := r.jbs[k]; ok {
+		r.jbMu.Unlock()
+		return jb
+	}
+	jb := NewJitterBuffer(ssrc,
+		func(hdr *RTPHeader, plain []byte) {
+			r.rtx.Put(hdr.SSRC, hdr.SequenceNumber, hdr.HeaderLen, plain)
+			r.forward(pub, plain, hdr, ssrcLayer(pub, hdr.SSRC))
+		},
+		func(ssrc uint32, lost []uint16) {
+			r.sendNACKUpstream(pub, ssrc, lost)
+		},
+	)
+	r.jbs[k] = jb
+	r.jbMu.Unlock()
+	return jb
+}
+
+// sendNACKUpstream cifra um RTPFB-NACK com a srtcpSend do publisher e envia.
+func (r *Router) sendNACKUpstream(pub *Session, mediaSSRC uint32, lost []uint16) {
+	pub.mu.Lock()
+	send := pub.srtcpSend
+	addr := pub.remoteAddr
+	senderSSRC := pub.rtpSSRC
+	pub.mu.Unlock()
+	if send == nil || addr == "" {
+		return
+	}
+	pkt := BuildNACK(senderSSRC, mediaSSRC, lost)
+	if len(pkt) == 0 {
+		return
+	}
+	cipher, err := send.Encrypt(pkt)
+	if err != nil {
+		return
+	}
+	ua, err := net.ResolveUDPAddr("udp", addr)
+	if err != nil {
+		return
+	}
+	_, _ = r.udp.WriteToUDP(cipher, ua)
+}
+
 
 // trackSSRC: chamado em todo RTP recebido — registra publisher do SSRC.
 func (r *Router) trackSSRC(s *Session, ssrc uint32) {
