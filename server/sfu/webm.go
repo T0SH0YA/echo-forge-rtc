@@ -64,6 +64,13 @@ const (
 	idCluster      = 0x1F43B675
 	idTimecode     = 0xE7
 	idSimpleBlock  = 0xA3
+
+	idCues               = 0x1C53BB6B
+	idCuePoint           = 0xBB
+	idCueTime            = 0xB3
+	idCueTrackPositions  = 0xB7
+	idCueTrack           = 0xF7
+	idCueClusterPosition = 0xF1
 )
 
 // ===== EBML primitives =====
