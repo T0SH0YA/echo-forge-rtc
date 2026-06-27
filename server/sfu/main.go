@@ -110,26 +110,39 @@ func (s *Server) handleNewSession(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "missing ice creds in offer", http.StatusBadRequest)
 		return
 	}
+	if offer.Fingerprint == "" {
+		http.Error(w, "missing fingerprint in offer", http.StatusBadRequest)
+		return
+	}
+
+	cert, err := generateDTLSCert()
+	if err != nil {
+		http.Error(w, "cert gen: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	fp := FingerprintSHA256(cert.Certificate[0])
 
 	sess := &Session{
-		ID:           uuid.NewString(),
-		LocalUfrag:   RandomUfrag(),
-		LocalPwd:     RandomPwd(),
-		RemoteUfrag:  offer.IceUfrag,
-		RemotePwd:    offer.IcePwd,
-		RemoteFinger: offer.Fingerprint,
+		ID:               uuid.NewString(),
+		LocalUfrag:       RandomUfrag(),
+		LocalPwd:         RandomPwd(),
+		RemoteUfrag:      offer.IceUfrag,
+		RemotePwd:        offer.IcePwd,
+		RemoteFinger:     offer.Fingerprint,
+		LocalCert:        cert,
+		LocalFingerprint: fp,
 	}
 	s.sessions.Add(sess)
 
 	answer := BuildAnswer(offer, AnswerParams{
 		IceUfrag:    sess.LocalUfrag,
 		IcePwd:      sess.LocalPwd,
-		Fingerprint: placeholderFingerprint,
+		Fingerprint: fp,
 		HostIP:      s.publicIP,
 		HostPort:    s.udpPort,
 	})
-	log.Printf("[sfu] session created id=%s ufrag=%s remoteUfrag=%s",
-		sess.ID, sess.LocalUfrag, sess.RemoteUfrag)
+	log.Printf("[sfu] session created id=%s ufrag=%s remoteUfrag=%s fp=%s…",
+		sess.ID, sess.LocalUfrag, sess.RemoteUfrag, fp[:24])
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(answerResp{Type: "answer", SDP: answer, SessionID: sess.ID})
@@ -152,7 +165,8 @@ func (s *Server) udpLoop() {
 }
 
 func (s *Server) handlePacket(raw []byte, from *net.UDPAddr) {
-	if IsSTUN(raw) {
+	switch {
+	case IsSTUN(raw):
 		stunIn.Add(1)
 		resp, _ := s.HandleBinding(raw, from)
 		if resp != nil {
@@ -160,9 +174,22 @@ func (s *Server) handlePacket(raw []byte, from *net.UDPAddr) {
 				stunOut.Add(1)
 			}
 		}
-		return
+	case IsDTLS(raw):
+		dtlsIn.Add(1)
+		sess := s.sessions.ByAddr(from.String())
+		if sess == nil {
+			// DTLS antes do ICE — descarta. O peer reenvia.
+			return
+		}
+		sess.mu.Lock()
+		pipe := sess.dtlsPipe
+		sess.mu.Unlock()
+		if pipe != nil {
+			pipe.Push(raw)
+		}
+	default:
+		// SRTP/RTCP entram na Etapa 7.
 	}
-	// Tudo que não é STUN: DTLS (Etapa 6), SRTP (Etapa 7). Por enquanto descarta.
 }
 
 func (s *Server) statsLoop(ctx context.Context) {
