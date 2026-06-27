@@ -44,7 +44,7 @@ const dtlsKeyingMaterialLabel = "EXTRACTOR-dtls_srtp"
 
 // generateDTLSCert cria um par ECDSA P-256 + cert self-signed válido por 30d.
 // Sujeito é irrelevante (DTLS-SRTP usa fingerprint, não CA).
-func generateDTLSCert() (*dtls.Certificate, error) {
+func generateDTLSCert() (*tls.Certificate, error) {
 	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
 		return nil, fmt.Errorf("ecdsa: %w", err)
@@ -66,7 +66,7 @@ func generateDTLSCert() (*dtls.Certificate, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &dtls.Certificate{
+	return &tls.Certificate{
 		Certificate: [][]byte{der},
 		PrivateKey:  priv,
 		Leaf:        cert,
@@ -165,9 +165,9 @@ func extractSRTPKeys(conn *dtls.Conn) (*SRTPKeyingMaterial, error) {
 // runDTLSServer toca o handshake como servidor (cliente é o browser/peer).
 // A net.Conn é o pipe alimentado pelo udpLoop quando demuxar pacotes DTLS
 // pra essa sessão. Bloqueia até o handshake terminar (sucesso ou erro).
-func runDTLSServer(ctx context.Context, pipe *dtlsPacketConn, cert *dtls.Certificate, remoteFingerprint string) (*dtls.Conn, *SRTPKeyingMaterial, error) {
+func runDTLSServer(ctx context.Context, pipe *dtlsPacketConn, cert *tls.Certificate, remoteFingerprint string) (*dtls.Conn, *SRTPKeyingMaterial, error) {
 	cfg := &dtls.Config{
-		Certificates:           []dtls.Certificate{*cert},
+		Certificates:           []tls.Certificate{*cert},
 		SRTPProtectionProfiles: srtpProfiles,
 		ClientAuth:             dtls.RequireAnyClientCert,
 		ExtendedMasterSecret:   dtls.RequireExtendedMasterSecret,

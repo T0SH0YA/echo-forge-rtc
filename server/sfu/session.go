@@ -49,7 +49,7 @@ type Session struct {
 	RemoteFinger string // "sha-256 AA:BB:..." da offer
 
 	// DTLS por sessão (Etapa 6)
-	LocalCert        *dtls.Certificate
+	LocalCert        *tls.Certificate
 	LocalFingerprint string // "sha-256 AA:BB:..." do nosso cert
 	dtlsPipe         *dtlsPacketConn
 	dtlsConn         *dtls.Conn
