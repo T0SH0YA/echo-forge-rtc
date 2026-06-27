@@ -127,7 +127,7 @@ func (h *RecorderHub) MuxSession(sessionID string) (string, error) {
 				return "", err
 			}
 			blocks = append(blocks, block{
-				ts: ivf.TimestampMs(fr.PTS), track: trackVideo,
+				ts: ivf.TimestampMs(fr.PTS) + vidOff, track: trackVideo,
 				keyframe: IsVP8Keyframe(fr.Data), data: fr.Data,
 			})
 		}
