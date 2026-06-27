@@ -147,8 +147,11 @@ func (r *Router) HandleRTP(from *Session, raw []byte) {
 	}
 
 	r.rtx.Put(hdr.SSRC, hdr.SequenceNumber, hdr.HeaderLen, plain)
-	r.forward(from, plain, hdr.HeaderLen, hdr.SSRC, hdr.SequenceNumber)
+	r.forward(from, plain, hdr, ssrcLayer(from, hdr.SSRC))
 }
+
+// ssrcLayer evita chamar layerOfSSRC duas vezes (router já chamou via from).
+func ssrcLayer(s *Session, ssrc uint32) string { return s.layerOfSSRC(ssrc) }
 
 
 // answerNACK reentrega localmente os pacotes pedidos via NACK, sem ida
