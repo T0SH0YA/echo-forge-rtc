@@ -227,6 +227,8 @@ func (s *Server) handleSessionSub(w http.ResponseWriter, r *http.Request) {
 		s.handleRecordStop(w, r, id)
 	case "record":
 		s.handleRecordGet(w, r, id)
+	case "record/mux":
+		s.handleRecordMux(w, r, id)
 	default:
 		http.NotFound(w, r)
 	}
