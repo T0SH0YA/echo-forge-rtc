@@ -67,11 +67,15 @@ Tudo vive **neste repositório**, em pastas separadas. Lovable é nosso editor +
 - [ ] TCP/TLS (5349), DONT-FRAGMENT, RESERVATION-TOKEN: fora desta etapa
 - [ ] Sinalização passar a emitir creds efêmeras e SDK consumir `iceServers`: entra junto da Etapa 5 (SFU)
 
-### Etapa 5 — SFU: ICE no servidor
-- ICE-lite no SFU (servidor não faz checks ativos, só responde STUN binding)
-- Candidatos host públicos do servidor anunciados no SDP
-- Negociação SDP com offer do cliente, answer do servidor
-- Conectividade estabelecida até DTLS
+### Etapa 5 — SFU: ICE no servidor ✅
+- [x] Codec STUN local no módulo SFU + atributos ICE (USERNAME, PRIORITY, USE-CANDIDATE, ICE-CONTROLLED/CONTROLLING)
+- [x] Parser SDP tolerante: extrai ice-ufrag/ice-pwd/fingerprint/setup/mid + BUNDLE
+- [x] Gerador de answer ICE-lite com candidato host UDP único e atributos rtpmap/fmtp/rtcp-fb devolvidos
+- [x] HTTP POST /sessions (offer JSON → answer JSON + sessionId), credenciais ICE aleatórias por sessão
+- [x] UDP single-port listener: responde Binding Request com USERNAME ("localUfrag:remoteUfrag"), valida MI com LocalPwd, anexa MI+FINGERPRINT na resposta
+- [x] USE-CANDIDATE marca sessão como ICEConnected fixando endereço remoto
+- [x] Testes E2E: SDP parse+answer, fluxo HTTP+UDP até ICEConnected, rejeição de MI inválido
+- [ ] Fingerprint do answer ainda é placeholder — DTLS real entra na Etapa 6
 
 ### Etapa 6 — SFU: DTLS handshake
 - DTLS 1.2 server (podemos usar `pion/dtls` como base interna ou crypto/tls adaptado — código nosso, dependência mínima MIT)
