@@ -183,6 +183,16 @@ func (s *Session) getPrefLayer(pubID string) string {
 	return s.prefLayer[pubID]
 }
 
+// nextSubTwccSeq devolve o próximo twcc seq pra um pacote saindo PRA este
+// peer (subscriber). Wrap natural de uint16.
+func (s *Session) nextSubTwccSeq() uint16 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	v := s.subTwccSeq
+	s.subTwccSeq++
+	return v
+}
+
 
 // SessionStore: lookup por LocalUfrag, ID e endereço remoto.
 type SessionStore struct {
