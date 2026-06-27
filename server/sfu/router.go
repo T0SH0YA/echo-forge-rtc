@@ -211,9 +211,9 @@ func (r *Router) shouldForward(pub, sub *Session, ssrc uint32, layer string) boo
 	return pref == layer
 }
 
-func (r *Router) forward(from *Session, plain []byte, headerLen int, ssrc uint32, seq uint16) {
-	layer := from.layerOfSSRC(ssrc)
-
+func (r *Router) forward(from *Session, plain []byte, hdr *RTPHeader, layer string) {
+	ssrc := hdr.SSRC
+	seq := hdr.SequenceNumber
 	r.mu.RLock()
 	targets := make([]*Session, 0, len(r.ses))
 	for _, s := range r.ses {
@@ -223,6 +223,7 @@ func (r *Router) forward(from *Session, plain []byte, headerLen int, ssrc uint32
 	}
 	r.mu.RUnlock()
 
+	now := nowMicros()
 	for _, sub := range targets {
 		if !r.shouldForward(from, sub, ssrc, layer) {
 			continue
@@ -230,6 +231,8 @@ func (r *Router) forward(from *Session, plain []byte, headerLen int, ssrc uint32
 		sub.mu.Lock()
 		send := sub.srtpSend
 		addr := sub.remoteAddr
+		subTwccID := sub.TWCCExtID
+		subBWE := sub.subBWE
 		sub.mu.Unlock()
 		if send == nil || addr == "" {
 			continue
@@ -238,12 +241,26 @@ func (r *Router) forward(from *Session, plain []byte, headerLen int, ssrc uint32
 		if err != nil {
 			continue
 		}
-		out, err := send.Encrypt(plain, headerLen, ssrc, seq)
+		// Etapa 14: reescreve twcc seq na header extension pro espaço do
+		// subscriber, registra (twcc_seq, sent_us) pro BWE downstream.
+		outPlain := plain
+		var twccSeq uint16
+		twccRewritten := false
+		if subTwccID > 0 {
+			twccSeq = sub.nextSubTwccSeq()
+			outPlain = CloneRTPAndRewriteTWCC(plain, hdr, subTwccID, twccSeq)
+			twccRewritten = outPlain != nil && len(outPlain) >= hdr.HeaderLen && outPlain[0] != 0
+			twccRewritten = subTwccID > 0
+		}
+		out, err := send.Encrypt(outPlain, hdr.HeaderLen, ssrc, seq)
 		if err != nil {
 			continue
 		}
 		if _, err := r.udp.WriteToUDP(out, ua); err == nil {
 			rtpFwd.Add(1)
+			if twccRewritten {
+				subBWE.RecordSent(twccSeq, now, len(out)*8)
+			}
 		}
 	}
 }
