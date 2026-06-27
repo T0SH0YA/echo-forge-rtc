@@ -1,3 +1,4 @@
+import { DataChannel, type DataChannelOptions } from "./data-channel";
 import { Emitter } from "./emitter";
 import { PeerLink } from "./peer-link";
 import { LocalTrack, RemoteTrack } from "./track";
@@ -15,7 +16,10 @@ interface RoomEvents extends Record<string, unknown> {
   "peer-left": { peerId: string };
   "track-subscribed": { peer: RemotePeer; track: RemoteTrack; stream: MediaStream };
   "track-unsubscribed": { peer: RemotePeer; track: RemoteTrack };
+  "data-channel": { peerId: string; channel: DataChannel };
+  data: { peerId: string; label: string; payload: string | ArrayBuffer | Blob };
   "connection-state": ConnectionState;
+  "peer-connection-state": { peerId: string; state: RTCPeerConnectionState };
   error: Error;
 }
 
@@ -138,6 +142,15 @@ export class Room extends Emitter<RoomEvents> {
         peer.tracks.delete(track.id);
         this.emit("track-unsubscribed", { peer, track });
       },
+      onDataChannel: (channel) => {
+        this.emit("data-channel", { peerId: remoteId, channel });
+        channel.on("message", ({ data }) => {
+          this.emit("data", { peerId: remoteId, label: channel.label, payload: data });
+        });
+      },
+      onConnectionStateChange: (state) => {
+        this.emit("peer-connection-state", { peerId: remoteId, state });
+      },
     });
     this.links.set(remoteId, link);
 
@@ -248,5 +261,49 @@ export class Room extends Emitter<RoomEvents> {
 
   getIceServers(): RTCIceServer[] {
     return this.iceServers;
+  }
+
+  // ---------- DataChannel API ----------
+
+  /**
+   * Abre (ou retorna existente) um DataChannel contra UM peer específico.
+   * O label identifica o canal lógico (ex.: "chat", "telemetry").
+   */
+  openDataChannel(peerId: string, label: string, opts: DataChannelOptions = {}): DataChannel {
+    const link = this.ensureLink(peerId, true);
+    return link.openDataChannel(label, opts);
+  }
+
+  /**
+   * Envia `payload` no canal `label` pra UM peer. Abre o canal se preciso.
+   * Para canais não-confiáveis (ex.: telemetria de jogo) passe opts em
+   * {@link openDataChannel} antes.
+   */
+  sendData(peerId: string, label: string, payload: string | ArrayBuffer | ArrayBufferView | Blob): void {
+    const link = this.links.get(peerId) ?? this.ensureLink(peerId, true);
+    let ch = link.getDataChannel(label);
+    if (!ch) ch = link.openDataChannel(label);
+    if (ch.readyState !== "open") {
+      ch.on("open", () => ch!.send(payload));
+      return;
+    }
+    ch.send(payload);
+  }
+
+  /**
+   * Broadcast: envia no canal `label` pra TODOS os peers conhecidos.
+   * Cada link mantém seu próprio DataChannel (mesh).
+   */
+  broadcastData(label: string, payload: string | ArrayBuffer | ArrayBufferView | Blob, opts?: DataChannelOptions): void {
+    for (const peerId of this.peers.keys()) {
+      const link = this.ensureLink(peerId, true);
+      let ch = link.getDataChannel(label);
+      if (!ch) ch = link.openDataChannel(label, opts);
+      if (ch.readyState === "open") {
+        ch.send(payload);
+      } else {
+        ch.on("open", () => ch!.send(payload));
+      }
+    }
   }
 }

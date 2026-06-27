@@ -137,12 +137,14 @@ Tudo vive **neste repositório**, em pastas separadas. Lovable é nosso editor +
 - [x] Testes: DCEP parse válido/inválido/truncado, roundtrip build↔parse, ACK byte exato, campo protocol não-vazio.
 - [ ] Negociação SID via DCEP completa (par/ímpar conforme DTLS role), reliability não-confiável (max retransmits / max lifetime), API no SDK (`room.sendData`): seguem na etapa 12.
 
-### Etapa 12 — DataChannel (continuação anterior)
-
-
-- SCTP sobre DTLS (RFC 8831)
-- Mensagens binárias e texto, ordered/unordered
-- API no SDK: `room.sendData(peerId, payload)`
+### Etapa 12 — SDK DataChannel API + reliability + ICE restart ✅
+- [x] `DataChannel` wrapper (`sdk/src/data-channel.ts`) — eventos tipados (`open`/`close`/`message`/`error`), `binaryType="arraybuffer"`, `bufferedAmount`, `readyState`.
+- [x] `DataChannelOptions`: `ordered`, `maxRetransmits`, `maxPacketLifeTime`, `protocol`, `negotiated`, `id` — repassados ao `RTCDataChannelInit`.
+- [x] `PeerLink.openDataChannel(label, opts)` cria canal; `ondatachannel` registra canais iniciados pelo remoto e expõe via callback.
+- [x] `Room.openDataChannel(peerId, label, opts)`, `Room.sendData(peerId, label, payload)` (abre canal se preciso, espera `open` se ainda conectando), `Room.broadcastData(label, payload, opts)` por todos os peers.
+- [x] Eventos novos: `room.on('data-channel', …)` e `room.on('data', { peerId, label, payload })`; `peer-connection-state` por peer.
+- [x] ICE restart automático: `onconnectionstatechange` em `failed`/`disconnected` agenda restart (lado impolite ofertante) com `createOffer({ iceRestart: true })`.
+- [x] Typecheck SDK verde (`tsgo --noEmit`).
 
 ### Etapa 11 — Endurecimento
 - Reconexão automática (ICE restart) no SDK

@@ -1,6 +1,7 @@
 // PeerLink = uma RTCPeerConnection contra UM peer remoto. Aplica
 // "perfect negotiation" (https://w3c.github.io/webrtc-pc/#perfect-negotiation-example):
 // um lado é "polite" (cede em colisão), o outro é "impolite".
+import { DataChannel, type DataChannelOptions } from "./data-channel";
 import { RemoteTrack } from "./track";
 import type { SignalingOut } from "./types";
 
@@ -8,6 +9,8 @@ export interface PeerLinkCallbacks {
   send: (msg: SignalingOut) => void;
   onTrack: (track: RemoteTrack, stream: MediaStream) => void;
   onTrackRemoved?: (track: RemoteTrack) => void;
+  onDataChannel?: (channel: DataChannel) => void;
+  onConnectionStateChange?: (state: RTCPeerConnectionState) => void;
 }
 
 export class PeerLink {
@@ -15,6 +18,8 @@ export class PeerLink {
   private makingOffer = false;
   private ignoreOffer = false;
   private pendingCandidates: RTCIceCandidateInit[] = [];
+  private channels = new Map<string, DataChannel>();
+  private restartScheduled = false;
 
   constructor(
     readonly remotePeerId: string,
@@ -54,10 +59,74 @@ export class PeerLink {
       cb.onTrack(rt, stream);
       ev.track.onended = () => cb.onTrackRemoved?.(rt);
     };
+
+    this.pc.ondatachannel = (ev) => {
+      const ch = new DataChannel(ev.channel.label, remotePeerId, ev.channel);
+      this.channels.set(ev.channel.label, ch);
+      cb.onDataChannel?.(ch);
+    };
+
+    this.pc.onconnectionstatechange = () => {
+      cb.onConnectionStateChange?.(this.pc.connectionState);
+      // ICE restart automático em falha (endurecimento)
+      if (
+        (this.pc.connectionState === "failed" || this.pc.connectionState === "disconnected") &&
+        !this.restartScheduled
+      ) {
+        this.restartScheduled = true;
+        setTimeout(() => this.tryIceRestart(), 1500);
+      }
+      if (this.pc.connectionState === "connected") {
+        this.restartScheduled = false;
+      }
+    };
+  }
+
+  private async tryIceRestart(): Promise<void> {
+    if (this.pc.connectionState === "connected" || this.pc.connectionState === "closed") {
+      this.restartScheduled = false;
+      return;
+    }
+    if (this.polite) {
+      // só o lado impolite reinicia, evita colisão dupla
+      this.restartScheduled = false;
+      return;
+    }
+    try {
+      this.makingOffer = true;
+      await this.pc.setLocalDescription(await this.pc.createOffer({ iceRestart: true }));
+      this.cb.send({ t: "offer", data: { to: this.remotePeerId, sdp: this.pc.localDescription!.sdp } });
+    } catch (err) {
+      console.warn("[sdk] ice restart", err);
+    } finally {
+      this.makingOffer = false;
+      this.restartScheduled = false;
+    }
   }
 
   addLocalTrack(track: MediaStreamTrack, stream: MediaStream): RTCRtpSender {
     return this.pc.addTrack(track, stream);
+  }
+
+  openDataChannel(label: string, opts: DataChannelOptions = {}): DataChannel {
+    const existing = this.channels.get(label);
+    if (existing) return existing;
+    const init: RTCDataChannelInit = {
+      ordered: opts.ordered ?? true,
+      maxRetransmits: opts.maxRetransmits,
+      maxPacketLifeTime: opts.maxPacketLifeTime,
+      protocol: opts.protocol,
+      negotiated: opts.negotiated,
+      id: opts.id,
+    };
+    const dc = this.pc.createDataChannel(label, init);
+    const ch = new DataChannel(label, this.remotePeerId, dc);
+    this.channels.set(label, ch);
+    return ch;
+  }
+
+  getDataChannel(label: string): DataChannel | undefined {
+    return this.channels.get(label);
   }
 
   async handleOffer(sdp: string): Promise<void> {
@@ -103,6 +172,8 @@ export class PeerLink {
   }
 
   close(): void {
+    for (const ch of this.channels.values()) ch.close();
+    this.channels.clear();
     this.pc.close();
   }
 }
