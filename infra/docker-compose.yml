@@ -1,0 +1,43 @@
+services:
+  signaling:
+    build:
+      context: ../server
+      dockerfile: ../infra/Dockerfile.go
+      args:
+        SERVICE: signaling
+    environment:
+      SIGNALING_ADDR: ":8080"
+    ports:
+      - "8080:8080"
+
+  stun:
+    build:
+      context: ../server
+      dockerfile: ../infra/Dockerfile.go
+      args:
+        SERVICE: stun
+    environment:
+      STUN_ADDR: ":3478"
+    ports:
+      - "3478:3478/udp"
+
+  turn:
+    build:
+      context: ../server
+      dockerfile: ../infra/Dockerfile.go
+      args:
+        SERVICE: turn
+    environment:
+      TURN_ADDR: ":3479"
+    # portas ativadas na Etapa 4
+
+  sfu:
+    build:
+      context: ../server
+      dockerfile: ../infra/Dockerfile.go
+      args:
+        SERVICE: sfu
+    environment:
+      SFU_ADDR: ":8081"
+    ports:
+      - "8081:8081"
