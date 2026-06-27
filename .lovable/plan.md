@@ -77,11 +77,17 @@ Tudo vive **neste repositório**, em pastas separadas. Lovable é nosso editor +
 - [x] Testes E2E: SDP parse+answer, fluxo HTTP+UDP até ICEConnected, rejeição de MI inválido
 - [ ] Fingerprint do answer ainda é placeholder — DTLS real entra na Etapa 6
 
-### Etapa 6 — SFU: DTLS handshake
-- DTLS 1.2 server (podemos usar `pion/dtls` como base interna ou crypto/tls adaptado — código nosso, dependência mínima MIT)
-- Certificado self-signed por sessão, fingerprint no SDP (a=fingerprint)
-- Verificação de fingerprint cruzada
-- Extração de keying material (RFC 5705) para SRTP
+### Etapa 6 — SFU: DTLS handshake ✅
+- [x] Cert ECDSA P-256 self-signed gerado por sessão (`generateDTLSCert`)
+- [x] Fingerprint SHA-256 formatado "sha-256 AA:BB:..." e embarcado no `a=fingerprint` do answer
+- [x] Verificação cruzada: `VerifyPeerCertificate` compara cert apresentado pelo peer com fingerprint do offer (defesa MITM dentro do túnel ICE)
+- [x] Demux RFC 7983 no UDP single-port: STUN (magic cookie obrigatório) vs DTLS (b0 ∈ [20,63])
+- [x] `dtlsPacketConn` — net.Conn adapter alimentado pelo udpLoop, escreve via UDPConn principal
+- [x] Handshake dispara automaticamente quando ICE chega a Connected (USE-CANDIDATE)
+- [x] Extração RFC 5705 com label "EXTRACTOR-dtls_srtp" → ClientKey/ServerKey/ClientSalt/ServerSalt prontos pra SRTP
+- [x] Profiles negociados: SRTP_AEAD_AES_128_GCM (preferido) + SRTP_AES128_CM_HMAC_SHA1_80 (fallback)
+- [x] Engine: pion/dtls v2 (MIT). Cert gen, fingerprint, verificação e EKM são código nosso.
+- [x] Testes E2E: fingerprint format/match + handshake real (pion como cliente) → DTLSEstablished + keys extraídas
 
 ### Etapa 7 — SFU: SRTP + forwarding básico
 - SRTP AES-128-GCM (RFC 7714): cifra/decifra, replay window
