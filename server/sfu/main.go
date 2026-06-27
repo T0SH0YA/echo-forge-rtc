@@ -74,7 +74,9 @@ func main() {
 	defer cancel()
 	go srv.udpLoop()
 	go srv.statsLoop(ctx)
+	srv.router.StartFeedbackLoop(ctx)
 	go shutdown(cancel, udp)
+
 
 	if err := http.ListenAndServe(httpAddr, mux); err != nil {
 		log.Fatalf("[sfu] http: %v", err)
@@ -280,12 +282,14 @@ func (s *Server) statsLoop(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-t.C:
-			log.Printf("[sfu] stats stun_in=%d stun_out=%d dtls_in=%d dtls_ok=%d rtp_in=%d rtp_fwd=%d rtp_drop=%d rtcp_in=%d rtcp_fwd=%d rtcp_fb=%d rtx_hit=%d rtx_miss=%d sctp=%d dc=%d dc_in=%d dc_fwd=%d",
+			log.Printf("[sfu] stats stun_in=%d stun_out=%d dtls_in=%d dtls_ok=%d rtp_in=%d rtp_fwd=%d rtp_drop=%d rtcp_in=%d rtcp_fwd=%d rtcp_fb=%d rtx_hit=%d rtx_miss=%d twcc_out=%d remb_out=%d sctp=%d dc=%d dc_in=%d dc_fwd=%d",
 				stunIn.Load(), stunOut.Load(), dtlsIn.Load(), dtlsHS.Load(),
 				rtpIn.Load(), rtpFwd.Load(), rtpDrop.Load(),
 				rtcpIn.Load(), rtcpFwd.Load(), rtcpFB.Load(),
 				rtxHit.Load(), rtxMiss.Load(),
+				twccSent.Load(), rembSent.Load(),
 				sctpAssoc.Load(), dcChans.Load(), dcMsgIn.Load(), dcMsgFwd.Load())
+
 
 		}
 	}
