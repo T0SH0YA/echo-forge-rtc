@@ -325,7 +325,7 @@ func (h *RecorderHub) createStream(pub *Session, sr *sessionRec, ssrc uint32, co
 		}
 		recOpen.Add(1)
 		log.Printf("[rec] open vp8 ssrc=%d → %s", ssrc, path)
-		return &streamRecorder{codec: "vp8", ivf: iw, clock: clock, ssrc: ssrc, rid: rid, file: name, openedAt: time.Now().UTC()}
+		return &streamRecorder{codec: "vp8", ivf: iw, clock: clock, ssrc: ssrc, rid: rid, file: name, openedAt: time.Now().UTC(), sessionStart: sr.startedAt}
 	case "opus":
 		name := fmt.Sprintf("%d%s.ogg", ssrc, suffix)
 		path := filepath.Join(sr.dir, name)
@@ -341,7 +341,7 @@ func (h *RecorderHub) createStream(pub *Session, sr *sessionRec, ssrc uint32, co
 		}
 		recOpen.Add(1)
 		log.Printf("[rec] open opus ssrc=%d → %s", ssrc, path)
-		return &streamRecorder{codec: "opus", ogg: ow, clock: clock, ssrc: ssrc, rid: rid, file: name, openedAt: time.Now().UTC()}
+		return &streamRecorder{codec: "opus", ogg: ow, clock: clock, ssrc: ssrc, rid: rid, file: name, openedAt: time.Now().UTC(), sessionStart: sr.startedAt}
 	}
 	return nil
 }
