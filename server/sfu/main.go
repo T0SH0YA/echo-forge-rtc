@@ -126,15 +126,17 @@ func (s *Server) handleNewSession(w http.ResponseWriter, r *http.Request) {
 	}
 	fp := FingerprintSHA256(cert.Certificate[0])
 
-	// Pega RIDExtID e RIDs do primeiro m-line de vídeo que negociou simulcast.
-	var ridExt, rridExt uint8
+	// Pega RIDExtID/TWCCExtID e RIDs do primeiro m-line de vídeo.
+	var ridExt, rridExt, twccExt uint8
 	var rids []string
 	for _, m := range offer.Media {
-		if m.Kind == "video" && len(m.RIDs) > 0 {
+		if m.TWCCExtID != 0 && twccExt == 0 {
+			twccExt = m.TWCCExtID
+		}
+		if m.Kind == "video" && len(m.RIDs) > 0 && ridExt == 0 {
 			ridExt = m.RIDExtID
 			rridExt = m.RRIDExtID
 			rids = m.RIDs
-			break
 		}
 	}
 
@@ -149,8 +151,10 @@ func (s *Server) handleNewSession(w http.ResponseWriter, r *http.Request) {
 		LocalFingerprint: fp,
 		RIDExtID:         ridExt,
 		RRIDExtID:        rridExt,
+		TWCCExtID:        twccExt,
 		OfferedRIDs:      rids,
 	}
+
 	s.sessions.Add(sess)
 
 	answer := BuildAnswer(offer, AnswerParams{

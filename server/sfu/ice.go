@@ -98,7 +98,13 @@ func (s *Server) maybeStartDTLS(sess *Session, peer *net.UDPAddr) {
 			sess.srtcpRecv = rcpRecv
 			sess.srtcpSend = rcpSend
 		}
+		// Etapa 13: inicia TWCC recorder + BWE pra esse peer.
+		sess.rtpSSRC = randUint32NonZero()
+		sess.twcc = NewTWCCRecorder(sess.rtpSSRC)
+		sess.bwe = NewBWE()
+		sess.lastSeq = map[uint32]uint16{}
 		sess.mu.Unlock()
+
 		dtlsHS.Add(1)
 		if errR != nil || errS != nil || errCR != nil || errCS != nil {
 			log.Printf("[sfu] srtp/srtcp ctx init fail session=%s recv=%v send=%v rcpR=%v rcpS=%v (profile=0x%04x)",
