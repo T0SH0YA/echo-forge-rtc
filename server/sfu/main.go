@@ -59,6 +59,7 @@ func main() {
 	port := udp.LocalAddr().(*net.UDPAddr).Port
 
 	srv := &Server{udp: udp, publicIP: publicIP, udpPort: port, sessions: newSessionStore()}
+	srv.router = NewRouter(udp)
 	log.Printf("[sfu] http=%s udp=%s public=%s:%d", httpAddr, udp.LocalAddr(), publicIP, port)
 
 	mux := http.NewServeMux()
