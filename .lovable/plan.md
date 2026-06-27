@@ -53,12 +53,19 @@ Tudo vive **neste repositório**, em pastas separadas. Lovable é nosso editor +
 - [x] Testes unitários + smoke test end-to-end (`go test` verde)
 - [ ] Integrar como `iceServers` no SDK (entra junto com Etapa 4 TURN)
 
-### Etapa 4 — TURN próprio
-- RFC 5766/8656: Allocate, Refresh, CreatePermission, ChannelBind, Send/Data, ChannelData
-- Long-term credentials + HMAC time-limited (compatível com padrão coturn)
-- Relay UDP primeiro; depois TCP e TLS (5349)
-- Sinalização passa a emitir credenciais TURN; SDK passa a usar
-- Teste: simular NAT simétrico, conexão sobe via TURN
+### Etapa 4 — TURN próprio ✅
+- [x] Codec STUN portado pro módulo turn + atributos TURN (CHANNEL-NUMBER, LIFETIME, XOR-PEER/RELAYED-ADDRESS, DATA, REQUESTED-TRANSPORT, ERROR-CODE)
+- [x] msgType/methodOf/classOf para todas as classes (request/indication/success/error)
+- [x] Long-term credentials RFC 5389: REALM + NONCE + MESSAGE-INTEGRITY HMAC-SHA1 com chave MD5(user:realm:pass)
+- [x] Ephemeral credentials formato coturn: username "expiry:user", password base64(HMAC-SHA1(secret, username))
+- [x] Allocate (request→401 challenge→success com XOR-RELAYED-ADDRESS + LIFETIME), Refresh, CreatePermission, ChannelBind
+- [x] Relay UDP→UDP: socket dedicado por allocation, Send indication (cliente→peer) e Data indication (peer→cliente)
+- [x] ChannelData (caminho rápido bidirecional, framing 0x4000-0x7FFE)
+- [x] Binding request (compat STUN) na mesma porta
+- [x] GC de allocations expiradas + estatísticas
+- [x] Testes E2E: Allocate flow completo + round-trip Send/Data + ephemeral creds + Binding
+- [ ] TCP/TLS (5349), DONT-FRAGMENT, RESERVATION-TOKEN: fora desta etapa
+- [ ] Sinalização passar a emitir creds efêmeras e SDK consumir `iceServers`: entra junto da Etapa 5 (SFU)
 
 ### Etapa 5 — SFU: ICE no servidor
 - ICE-lite no SFU (servidor não faz checks ativos, só responde STUN binding)
