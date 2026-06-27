@@ -79,6 +79,7 @@ func (r *Router) Remove(id string) {
 			}
 		}
 
+		r.rec.CloseSession(id)
 	}
 }
 
