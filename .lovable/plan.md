@@ -44,11 +44,14 @@ Tudo vive **neste repositório**, em pastas separadas. Lovable é nosso editor +
 - [x] Playground real (conectar, publicar, ver remotos)
 - [ ] STUN/TURN: ainda nenhum (LAN/loopback funciona; pra cross-NAT precisa Etapa 3/4)
 
-### Etapa 3 — STUN próprio
-- Implementar RFC 5389 em Go puro (header, atributos, MESSAGE-INTEGRITY HMAC-SHA1, FINGERPRINT CRC-32, XOR-MAPPED-ADDRESS)
-- Testes unitários contra vetores da RFC
-- Teste de integração: SDK descobre seu IP público via nosso STUN
-- Suporte IPv4+IPv6, multiplos endereços
+### Etapa 3 — STUN próprio ✅
+- [x] RFC 5389 em Go puro: header, parser/encoder TLV, padding 4-byte
+- [x] XOR-MAPPED-ADDRESS IPv4 e IPv6 (encode/decode)
+- [x] MESSAGE-INTEGRITY HMAC-SHA1 com length-rewriting
+- [x] FINGERPRINT CRC-32 (XOR 0x5354554E)
+- [x] Servidor UDP responde Binding Request com XOR-MAPPED + SOFTWARE + FINGERPRINT
+- [x] Testes unitários + smoke test end-to-end (`go test` verde)
+- [ ] Integrar como `iceServers` no SDK (entra junto com Etapa 4 TURN)
 
 ### Etapa 4 — TURN próprio
 - RFC 5766/8656: Allocate, Refresh, CreatePermission, ChannelBind, Send/Data, ChannelData
