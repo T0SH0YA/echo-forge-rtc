@@ -194,9 +194,9 @@ func (s *Server) handlePacket(raw []byte, from *net.UDPAddr) {
 			return
 		}
 		if IsRTCP(raw) {
-			rtcpIn.Add(1)
-			// RTCP forwarding/SRTCP entram numa próxima etapa (precisa de SRTCP
-			// frame com E-bit + index, distinto do SRTP). Por enquanto, conta e dropa.
+			if s.router != nil {
+				s.router.HandleRTCP(sess, raw)
+			}
 			return
 		}
 		if s.router != nil {
