@@ -49,11 +49,15 @@ type Router struct {
 	// Etapa 15: jitter buffer por (publisher, ssrc). Chave string = sessionID|ssrc.
 	jbMu sync.Mutex
 	jbs  map[string]*JitterBuffer
+
+	// Etapa 16: gravação opcional (SFU_RECORD_DIR).
+	rec *RecorderHub
 }
 
 func NewRouter(udp *net.UDPConn) *Router {
-	return &Router{udp: udp, ses: map[string]*Session{}, ssrc: map[uint32]*Session{}, rtx: NewRTXCache(), jbs: map[string]*JitterBuffer{}}
+	return &Router{udp: udp, ses: map[string]*Session{}, ssrc: map[uint32]*Session{}, rtx: NewRTXCache(), jbs: map[string]*JitterBuffer{}, rec: NewRecorderHub()}
 }
+
 
 
 func (r *Router) Add(s *Session) {
