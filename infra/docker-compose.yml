@@ -29,7 +29,14 @@ services:
         SERVICE: turn
     environment:
       TURN_ADDR: ":3479"
-    # portas ativadas na Etapa 4
+      TURN_REALM: "webrtc-own"
+      TURN_PUBLIC_IP: "127.0.0.1"
+      TURN_STATIC_USER: "demo"
+      TURN_STATIC_PASS: "demo"
+      # Ative ephemeral creds gerando segredo e exportando:
+      # TURN_AUTH_SECRET: "change-me"
+    network_mode: "host"
+    # Usa host network pra relay UDP funcionar (porta efêmera por allocation).
 
   sfu:
     build:
