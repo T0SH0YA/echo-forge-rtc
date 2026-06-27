@@ -120,3 +120,65 @@ func BuildPLI(senderSSRC, mediaSSRC uint32) []byte {
 	binary.BigEndian.PutUint32(out[8:12], mediaSSRC)
 	return out
 }
+
+// BuildNACK constrói um RTPFB-NACK pra uma lista de seqs perdidos do mediaSSRC.
+// Cada FCI cobre PID + 16 seqs seguintes via bitmask (RFC 4585 §6.2.1).
+func BuildNACK(senderSSRC, mediaSSRC uint32, lostSeqs []uint16) []byte {
+	if len(lostSeqs) == 0 {
+		return nil
+	}
+	// Agrupa em FCIs: cada PID cobre [PID, PID+16].
+	type fci struct {
+		pid uint16
+		blp uint16
+	}
+	fcis := []fci{}
+	i := 0
+	for i < len(lostSeqs) {
+		pid := lostSeqs[i]
+		blp := uint16(0)
+		j := i + 1
+		for j < len(lostSeqs) {
+			delta := lostSeqs[j] - pid
+			if delta == 0 || delta > 16 {
+				break
+			}
+			blp |= 1 << (delta - 1)
+			j++
+		}
+		fcis = append(fcis, fci{pid, blp})
+		i = j
+	}
+	totalLen := 12 + 4*len(fcis)
+	out := make([]byte, totalLen)
+	out[0] = 0x80 | FBFmtNACK
+	out[1] = RTCPRTPFB
+	binary.BigEndian.PutUint16(out[2:4], uint16(totalLen/4)-1)
+	binary.BigEndian.PutUint32(out[4:8], senderSSRC)
+	binary.BigEndian.PutUint32(out[8:12], mediaSSRC)
+	for k, f := range fcis {
+		off := 12 + 4*k
+		binary.BigEndian.PutUint16(out[off:off+2], f.pid)
+		binary.BigEndian.PutUint16(out[off+2:off+4], f.blp)
+	}
+	return out
+}
+
+// ParseNACK expande as FCIs de um RTPFB-NACK na lista de seqs perdidos.
+func ParseNACK(p RTCPPacket) []uint16 {
+	if !p.IsNACK() || len(p.Raw) < 12 {
+		return nil
+	}
+	out := []uint16{}
+	for off := 12; off+4 <= len(p.Raw); off += 4 {
+		pid := binary.BigEndian.Uint16(p.Raw[off : off+2])
+		blp := binary.BigEndian.Uint16(p.Raw[off+2 : off+4])
+		out = append(out, pid)
+		for bit := 0; bit < 16; bit++ {
+			if blp&(1<<bit) != 0 {
+				out = append(out, pid+uint16(bit+1))
+			}
+		}
+	}
+	return out
+}
