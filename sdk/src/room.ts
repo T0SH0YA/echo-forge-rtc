@@ -10,7 +10,7 @@ import type {
   SignalingOut,
 } from "./types";
 
-interface RoomEvents {
+interface RoomEvents extends Record<string, unknown> {
   "peer-joined": RemotePeer;
   "peer-left": { peerId: string };
   "track-subscribed": { peer: RemotePeer; track: RemoteTrack; stream: MediaStream };
