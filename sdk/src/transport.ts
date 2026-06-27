@@ -150,7 +150,14 @@ function openBroadcastChannel(channelName: string, roomId: string): Promise<Sign
         payload: msg,
       } satisfies BCFrame);
     },
-    onMessage: (fn) => void messageHandlers.add(fn),
+    onMessage: (fn) => {
+      messageHandlers.add(fn);
+      // drena o que chegou antes do handler ser registrado
+      if (pending.length > 0) {
+        const drain = pending.splice(0, pending.length);
+        for (const m of drain) fn(m);
+      }
+    },
     onClose: (fn) => void closeHandlers.add(fn),
     close: () => {
       bc.close();
