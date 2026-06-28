@@ -1,14 +1,30 @@
 services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      ACME_EMAIL: ${ACME_EMAIL:-admin@teli.app.br}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - signaling
+
   signaling:
     build:
       context: ../server
       dockerfile: ../infra/Dockerfile.go
       args:
         SERVICE: signaling
+    restart: unless-stopped
     environment:
       SIGNALING_ADDR: ":8080"
-    ports:
-      - "8080:8080"
+    expose:
+      - "8080"
 
   stun:
     build:
@@ -16,6 +32,7 @@ services:
       dockerfile: ../infra/Dockerfile.go
       args:
         SERVICE: stun
+    restart: unless-stopped
     environment:
       STUN_ADDR: ":3478"
     ports:
@@ -27,16 +44,14 @@ services:
       dockerfile: ../infra/Dockerfile.go
       args:
         SERVICE: turn
+    restart: unless-stopped
     environment:
       TURN_ADDR: ":3479"
       TURN_REALM: "webrtc-own"
-      TURN_PUBLIC_IP: "127.0.0.1"
+      TURN_PUBLIC_IP: "${PUBLIC_IP:-127.0.0.1}"
       TURN_STATIC_USER: "demo"
       TURN_STATIC_PASS: "demo"
-      # Ative ephemeral creds gerando segredo e exportando:
-      # TURN_AUTH_SECRET: "change-me"
     network_mode: "host"
-    # Usa host network pra relay UDP funcionar (porta efêmera por allocation).
 
   sfu:
     build:
@@ -44,10 +59,15 @@ services:
       dockerfile: ../infra/Dockerfile.go
       args:
         SERVICE: sfu
+    restart: unless-stopped
     environment:
       SFU_HTTP_ADDR: ":8081"
       SFU_UDP_ADDR: ":7000"
-      SFU_PUBLIC_IP: "127.0.0.1"
+      SFU_PUBLIC_IP: "${PUBLIC_IP:-127.0.0.1}"
     ports:
       - "8081:8081"
       - "7000:7000/udp"
+
+volumes:
+  caddy_data:
+  caddy_config:
