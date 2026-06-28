@@ -1,0 +1,10 @@
+{
+	email {$ACME_EMAIL}
+}
+
+sig.teli.app.br {
+	encode zstd gzip
+
+	# WebSocket + HTTP do signaling (Go, porta interna 8080)
+	reverse_proxy signaling:8080
+}

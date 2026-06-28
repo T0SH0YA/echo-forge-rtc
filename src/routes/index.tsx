@@ -47,8 +47,10 @@ function MeetingRoom() {
   const roomRef = useRef<Room | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
 
-  // Loopback entre abas (sem servidor). Pra produção real, troque por wss://seu-signaling.
-  const signalingUrl = "bc://lovable-room";
+  // Signaling: usa VITE_SIGNALING_URL se definido (ex: wss://sig.teli.app.br),
+  // senão cai no loopback bc:// (só funciona entre abas do mesmo navegador).
+  const signalingUrl =
+    (import.meta.env.VITE_SIGNALING_URL as string | undefined) || "bc://lovable-room";
 
   const shareUrl = useMemo(() => {
     if (typeof window === "undefined") return "";
