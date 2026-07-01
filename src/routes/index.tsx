@@ -1,5 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useChat } from "../hooks/useChat";
+import { ChatPanel } from "../components/ChatPanel";
 import { Client, type Room, type RemoteTrack } from "../../sdk/src";
 
 export const Route = createFileRoute("/")({
@@ -41,6 +43,9 @@ function MeetingRoom() {
   const [remotes, setRemotes] = useState<RemoteEntry[]>([]);
   const [micOn, setMicOn] = useState(true);
   const [camOn, setCamOn] = useState(true);
+  const [room, setRoom] = useState<Room | null>(null);
+  const [chatOpen, setChatOpen] = useState(false);
+  const chat = useChat(room, name);
   const [copied, setCopied] = useState(false);
 
   const localVideoRef = useRef<HTMLVideoElement>(null);
@@ -62,6 +67,7 @@ function MeetingRoom() {
   useEffect(() => {
     return () => {
       void roomRef.current?.leave();
+      setRoom(null);
       localStreamRef.current?.getTracks().forEach((t) => t.stop());
     };
   }, []);
@@ -82,6 +88,7 @@ function MeetingRoom() {
       const client = new Client({ url: signalingUrl });
       const room = await client.join({ roomId, token: name || "anon" });
       roomRef.current = room;
+      setRoom(room);
 
       room.on("peer-left", ({ peerId }) => {
         setRemotes((r) => r.filter((x) => x.peerId !== peerId));
@@ -221,7 +228,8 @@ function MeetingRoom() {
   const cols = tiles.length === 1 ? "grid-cols-1" : tiles.length === 2 ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-2 lg:grid-cols-3";
 
   return (
-    <div className="flex h-screen flex-col bg-background text-foreground">
+    <div className="flex h-screen bg-background text-foreground">
+      <div className="flex min-w-0 flex-1 flex-col">
       <header className="flex items-center justify-between border-b border-border px-4 py-3">
         <div className="min-w-0">
           <div className="text-xs uppercase tracking-wide text-muted-foreground">Sala</div>
@@ -248,6 +256,16 @@ function MeetingRoom() {
       <footer className="flex items-center justify-center gap-3 border-t border-border px-4 py-4">
         <CtrlBtn active={micOn} onClick={toggleMic} label={micOn ? "Mic" : "Mic off"} />
         <CtrlBtn active={camOn} onClick={toggleCam} label={camOn ? "Câmera" : "Câmera off"} />
+        <CtrlBtn
+          active={chatOpen}
+          onClick={() => {
+            setChatOpen((o) => {
+              if (!o) chat.markRead();
+              return !o;
+            });
+          }}
+          label={chat.unread > 0 && !chatOpen ? `Chat (${chat.unread})` : "Chat"}
+        />
         <button
           onClick={leave}
           className="rounded-full bg-red-600 px-6 py-2.5 text-sm font-medium text-white hover:bg-red-700"
@@ -255,6 +273,13 @@ function MeetingRoom() {
           Sair
         </button>
       </footer>
+    </div>
+      <ChatPanel
+        open={chatOpen}
+        onClose={() => setChatOpen(false)}
+        messages={chat.messages}
+        onSend={chat.send}
+      />
     </div>
   );
 }
