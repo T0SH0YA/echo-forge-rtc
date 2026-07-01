@@ -78,9 +78,31 @@ function MeetingRoom() {
     setPhase("joining");
     setErrMsg("");
     try {
-      // 1. pega câmera/mic
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      // 1. pega câmera/mic — se não houver câmera, cai pra só áudio
+      let stream: MediaStream;
+      let hasVideo = true;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      } catch (err) {
+        const name = (err as DOMException)?.name;
+        if (name === "NotFoundError" || name === "OverconstrainedError" || name === "NotReadableError") {
+          // sem câmera disponível — tenta só áudio
+          try {
+            stream = await navigator.mediaDevices.getUserMedia({ video: false, audio: true });
+            hasVideo = false;
+          } catch (err2) {
+            throw new Error(
+              "Nenhum microfone/câmera encontrados. Verifique se algum dispositivo está conectado e se o navegador tem permissão.",
+            );
+          }
+        } else if (name === "NotAllowedError") {
+          throw new Error("Permissão de câmera/microfone negada. Libere nas configurações do navegador.");
+        } else {
+          throw err;
+        }
+      }
       localStreamRef.current = stream;
+      if (!hasVideo) setCamOn(false);
       if (localVideoRef.current) {
         localVideoRef.current.srcObject = stream;
         await localVideoRef.current.play().catch(() => {});
@@ -109,7 +131,7 @@ function MeetingRoom() {
       });
 
       // 3. publica
-      await room.publishCamera({ video: true, audio: true });
+      await room.publishCamera({ video: hasVideo, audio: true });
 
       setPhase("in-call");
     } catch (err) {
