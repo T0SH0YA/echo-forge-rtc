@@ -49,14 +49,14 @@ export function ChatPanel({ open, onClose, messages, onSend }: ChatPanelProps) {
   if (!open) return null;
 
   return (
-    <aside className="flex h-full w-full flex-col border-l border-border bg-card sm:w-80">
-      <header className="flex items-center justify-between border-b border-border px-4 py-3">
+    <aside className="flex h-full w-full flex-col border-l border-white/10 bg-card/80 backdrop-blur-xl sm:w-80">
+      <header className="flex items-center justify-between border-b border-white/5 px-4 py-3.5">
         <h2 className="text-sm font-semibold text-foreground">Mensagens</h2>
         <button
           type="button"
           onClick={onClose}
           aria-label="Fechar chat"
-          className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground"
         >
           <X className="h-4 w-4" />
         </button>
@@ -87,8 +87,8 @@ export function ChatPanel({ open, onClose, messages, onSend }: ChatPanelProps) {
               <div
                 className={
                   m.self
-                    ? "max-w-[85%] rounded-2xl rounded-tr-sm bg-primary px-3 py-2 text-sm text-primary-foreground"
-                    : "max-w-[85%] rounded-2xl rounded-tl-sm bg-muted px-3 py-2 text-sm text-foreground"
+                    ? "max-w-[85%] rounded-2xl rounded-tr-sm bg-primary px-3.5 py-2 text-sm text-primary-foreground shadow-md shadow-primary/20"
+                    : "max-w-[85%] rounded-2xl rounded-tl-sm bg-white/10 px-3.5 py-2 text-sm text-foreground ring-1 ring-white/5"
                 }
               >
                 <span className="whitespace-pre-wrap break-words leading-relaxed">{m.text}</span>
@@ -98,8 +98,8 @@ export function ChatPanel({ open, onClose, messages, onSend }: ChatPanelProps) {
         )}
       </div>
 
-      <div className="border-t border-border p-3">
-        <div className="flex items-end gap-2 rounded-2xl border border-input bg-background px-3 py-2 focus-within:ring-2 focus-within:ring-ring">
+      <div className="border-t border-white/5 p-3">
+        <div className="flex items-end gap-2 rounded-2xl border border-input bg-background/60 px-3.5 py-2.5 transition focus-within:border-primary/60 focus-within:ring-2 focus-within:ring-primary/40">
           <input
             ref={inputRef}
             value={draft}
@@ -118,7 +118,7 @@ export function ChatPanel({ open, onClose, messages, onSend }: ChatPanelProps) {
             onClick={submit}
             disabled={!draft.trim()}
             aria-label="Enviar"
-            className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-40"
+            className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-md shadow-primary/25 transition hover:bg-primary/90 hover:scale-105 active:scale-95 disabled:opacity-40 disabled:shadow-none"
           >
             <Send className="h-4 w-4" />
           </button>
