@@ -122,6 +122,9 @@ export class PeerLink {
     const dc = this.pc.createDataChannel(label, init);
     const ch = new DataChannel(label, this.remotePeerId, dc);
     this.channels.set(label, ch);
+    // Notifica também para canais criados localmente, para que o Room
+    // possa escutar "message" e propagar como evento "data".
+    this.cb.onDataChannel?.(ch);
     return ch;
   }
 
