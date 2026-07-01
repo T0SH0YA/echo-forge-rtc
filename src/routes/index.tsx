@@ -1,8 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Mic, MicOff, Video, VideoOff, MessageSquare, PhoneOff, Copy, Check } from "lucide-react";
+import { Mic, MicOff, Video, VideoOff, MessageSquare, PhoneOff, Copy, Check, MonitorUp, MonitorOff, Circle, FileText } from "lucide-react";
 import { useChat } from "../hooks/useChat";
 import { ChatPanel } from "../components/ChatPanel";
+import { TranscriptPanel } from "../components/TranscriptPanel";
+import { useActiveSpeaker } from "../hooks/useActiveSpeaker";
+import { useScreenShare } from "../hooks/useScreenShare";
+import { useRecorder } from "../hooks/useRecorder";
+import { useTranscription } from "../hooks/useTranscription";
 import teliLogoAsset from "../assets/teli-logo.png.asset.json";
 const teliLogo = teliLogoAsset.url;
 import { Client, type Room, type RemoteTrack } from "../../sdk/src";
@@ -48,7 +53,23 @@ function MeetingRoom() {
   const [camOn, setCamOn] = useState(true);
   const [room, setRoom] = useState<Room | null>(null);
   const [chatOpen, setChatOpen] = useState(false);
+  const [transcriptOpen, setTranscriptOpen] = useState(false);
   const chat = useChat(room, name);
+  const screen = useScreenShare(room);
+  const recorder = useRecorder(localStreamRef.current, (blob, filename) => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  });
+  const transcription = useTranscription(name || "Voce");
+  const speakerSources = [
+    { id: "local", stream: localStreamRef.current },
+    ...remotes.map((r) => ({ id: r.peerId, stream: r.stream })),
+  ];
+  const activeSpeaker = useActiveSpeaker(speakerSources);
   const [copied, setCopied] = useState(false);
 
   const localVideoRef = useRef<HTMLVideoElement>(null);
@@ -246,6 +267,9 @@ function MeetingRoom() {
 
   // ---------- IN-CALL ----------
   const tiles = [
+      ...(screen.sharing && screen.screenStream
+        ? [{ peerId: "screen", stream: screen.screenStream, label: "Sua tela", local: true }]
+        : []),
     { peerId: "local", stream: localStreamRef.current, label: `${name} (você)`, local: true },
     ...remotes.map((r) => ({ peerId: r.peerId, stream: r.stream, label: r.peerId, local: false })),
   ];
@@ -273,9 +297,18 @@ function MeetingRoom() {
         <main className="flex-1 overflow-auto p-3 sm:p-6">
           <div className={`grid gap-2 sm:gap-3 ${cols}`}>
             {tiles.map((t) => (
-              <Tile key={t.peerId} label={t.label}>
-                <VideoEl stream={t.stream} muted={t.local} />
-              </Tile>
+              <div
+                key={t.peerId}
+                className={
+                  activeSpeaker === t.peerId
+                    ? "rounded-xl ring-2 ring-primary ring-offset-2 ring-offset-background transition"
+                    : "rounded-xl ring-0 transition"
+                }
+              >
+                <Tile label={t.label}>
+                  <VideoEl stream={t.stream} muted={t.local} />
+                </Tile>
+              </div>
             ))}
           </div>
         </main>
@@ -292,6 +325,24 @@ function MeetingRoom() {
             onClick={toggleCam}
             label={camOn ? "Câmera ligada" : "Câmera desligada"}
             icon={camOn ? <Video className="h-5 w-5" /> : <VideoOff className="h-5 w-5" />}
+          />
+          <CtrlBtn
+            active={!screen.sharing}
+            onClick={screen.toggle}
+            label={screen.sharing ? "Parar apresentacao" : "Apresentar tela"}
+            icon={screen.sharing ? <MonitorOff className="h-5 w-5" /> : <MonitorUp className="h-5 w-5" />}
+          />
+          <CtrlBtn
+            active={!recorder.recording}
+            onClick={recorder.toggle}
+            label={recorder.recording ? "Parar gravacao" : "Gravar reuniao"}
+            icon={<Circle className={recorder.recording ? "h-5 w-5 fill-current text-red-400" : "h-5 w-5"} />}
+          />
+          <CtrlBtn
+            active={!transcriptOpen}
+            onClick={() => setTranscriptOpen((o) => !o)}
+            label="Transcricao"
+            icon={<FileText className="h-5 w-5" />}
           />
           <CtrlBtn
             active={!chatOpen}
@@ -328,6 +379,27 @@ function MeetingRoom() {
               onClose={() => setChatOpen(false)}
               messages={chat.messages}
               onSend={chat.send}
+            />
+          </div>
+        </>
+      )}
+
+      {transcriptOpen && (
+        <>
+          <div
+            className="fixed inset-0 z-40 bg-black/40 sm:hidden"
+            onClick={() => setTranscriptOpen(false)}
+          />
+          <div className="fixed inset-y-0 right-0 z-50 w-full max-w-sm sm:static sm:z-auto sm:max-w-none">
+            <TranscriptPanel
+              open={transcriptOpen}
+              onClose={() => setTranscriptOpen(false)}
+              lines={transcription.lines}
+              active={transcription.active}
+              supported={transcription.supported}
+              onToggle={transcription.toggle}
+              onClear={transcription.clear}
+              getFullText={transcription.getFullText}
             />
           </div>
         </>
