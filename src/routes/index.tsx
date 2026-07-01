@@ -252,58 +252,86 @@ function MeetingRoom() {
   const cols = tiles.length === 1 ? "grid-cols-1" : tiles.length === 2 ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-2 lg:grid-cols-3";
 
   return (
-    <div className="flex h-screen bg-background text-foreground">
+    <div className="flex h-[100dvh] bg-background text-foreground">
       <div className="flex min-w-0 flex-1 flex-col">
-      <header className="flex items-center justify-between border-b border-border px-4 py-3">
-        <div className="min-w-0">
-          <img src={teliLogo} alt="Teli" className="h-5 w-auto" />
-          <div className="truncate text-sm font-medium">{roomId}</div>
-        </div>
-        <button
-          onClick={copyLink}
-          className="rounded-md border border-border px-3 py-1.5 text-xs hover:bg-muted"
-        >
-          {copied ? "Link copiado!" : "Copiar link"}
-        </button>
-      </header>
+        <header className="flex items-center justify-between border-b border-border px-3 py-2 sm:px-4 sm:py-3">
+          <div className="flex min-w-0 items-center gap-3">
+            <img src={teliLogo} alt="Teli" className="h-6 w-auto sm:h-7" />
+            <div className="truncate text-xs text-muted-foreground sm:text-sm">
+              Sala <span className="font-medium text-foreground">{roomId}</span>
+            </div>
+          </div>
+          <button
+            onClick={copyLink}
+            className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-xs hover:bg-muted"
+          >
+            {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+            <span className="hidden sm:inline">{copied ? "Link copiado!" : "Copiar link"}</span>
+          </button>
+        </header>
 
-      <main className="flex-1 overflow-auto p-3">
-        <div className={`grid gap-3 ${cols}`}>
-          {tiles.map((t) => (
-            <Tile key={t.peerId} label={t.label}>
-              <VideoEl stream={t.stream} muted={t.local} />
-            </Tile>
-          ))}
-        </div>
-      </main>
+        <main className="flex-1 overflow-auto p-2 sm:p-3">
+          <div className={`grid gap-2 sm:gap-3 ${cols}`}>
+            {tiles.map((t) => (
+              <Tile key={t.peerId} label={t.label}>
+                <VideoEl stream={t.stream} muted={t.local} />
+              </Tile>
+            ))}
+          </div>
+        </main>
 
-      <footer className="flex items-center justify-center gap-3 border-t border-border px-4 py-4">
-        <CtrlBtn active={micOn} onClick={toggleMic} label={micOn ? "Mic" : "Mic off"} />
-        <CtrlBtn active={camOn} onClick={toggleCam} label={camOn ? "Câmera" : "Câmera off"} />
-        <CtrlBtn
-          active={chatOpen}
-          onClick={() => {
-            setChatOpen((o) => {
-              if (!o) chat.markRead();
-              return !o;
-            });
-          }}
-          label={chat.unread > 0 && !chatOpen ? `Chat (${chat.unread})` : "Chat"}
-        />
-        <button
-          onClick={leave}
-          className="rounded-full bg-red-600 px-6 py-2.5 text-sm font-medium text-white hover:bg-red-700"
-        >
-          Sair
-        </button>
-      </footer>
-    </div>
-      <ChatPanel
-        open={chatOpen}
-        onClose={() => setChatOpen(false)}
-        messages={chat.messages}
-        onSend={chat.send}
-      />
+        <footer className="flex items-center justify-center gap-2 border-t border-border px-2 py-3 sm:gap-3 sm:py-4">
+          <CtrlBtn
+            active={micOn}
+            onClick={toggleMic}
+            label={micOn ? "Microfone ligado" : "Microfone desligado"}
+            icon={micOn ? <Mic className="h-5 w-5" /> : <MicOff className="h-5 w-5" />}
+          />
+          <CtrlBtn
+            active={camOn}
+            onClick={toggleCam}
+            label={camOn ? "Câmera ligada" : "Câmera desligada"}
+            icon={camOn ? <Video className="h-5 w-5" /> : <VideoOff className="h-5 w-5" />}
+          />
+          <CtrlBtn
+            active={!chatOpen}
+            onClick={() => {
+              setChatOpen((o) => {
+                if (!o) chat.markRead();
+                return !o;
+              });
+            }}
+            label="Chat"
+            icon={<MessageSquare className="h-5 w-5" />}
+            badge={chat.unread > 0 && !chatOpen ? chat.unread : undefined}
+          />
+          <button
+            onClick={leave}
+            aria-label="Sair da chamada"
+            className="ml-1 inline-flex h-12 w-14 items-center justify-center rounded-full bg-red-600 text-white shadow-sm transition hover:bg-red-700 sm:w-16"
+          >
+            <PhoneOff className="h-5 w-5" />
+          </button>
+        </footer>
+      </div>
+
+      {/* Chat: overlay em mobile, sidebar em desktop */}
+      {chatOpen && (
+        <>
+          <div
+            className="fixed inset-0 z-40 bg-black/40 sm:hidden"
+            onClick={() => setChatOpen(false)}
+          />
+          <div className="fixed inset-y-0 right-0 z-50 w-full max-w-sm sm:static sm:z-auto sm:max-w-none">
+            <ChatPanel
+              open={chatOpen}
+              onClose={() => setChatOpen(false)}
+              messages={chat.messages}
+              onSend={chat.send}
+            />
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -338,17 +366,36 @@ function Tile({ label, children }: { label: string; children: React.ReactNode })
   );
 }
 
-function CtrlBtn({ active, onClick, label }: { active: boolean; onClick: () => void; label: string }) {
+function CtrlBtn({
+  active,
+  onClick,
+  label,
+  icon,
+  badge,
+}: {
+  active: boolean;
+  onClick: () => void;
+  label: string;
+  icon: React.ReactNode;
+  badge?: number;
+}) {
   return (
     <button
       onClick={onClick}
-      className={`rounded-full px-4 py-2.5 text-sm font-medium transition ${
+      aria-label={label}
+      title={label}
+      className={`relative inline-flex h-12 w-12 items-center justify-center rounded-full transition sm:h-12 sm:w-12 ${
         active
           ? "bg-muted text-foreground hover:bg-muted/80"
           : "bg-red-600 text-white hover:bg-red-700"
       }`}
     >
-      {label}
+      {icon}
+      {badge ? (
+        <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold text-primary-foreground">
+          {badge}
+        </span>
+      ) : null}
     </button>
   );
 }
