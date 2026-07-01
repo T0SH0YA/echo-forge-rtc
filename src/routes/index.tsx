@@ -2,7 +2,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useChat } from "../hooks/useChat";
 import { ChatPanel } from "../components/ChatPanel";
-import teliLogo from "../../teli-logo.png?url";
+import teliLogoAsset from "../assets/teli-logo.png.asset.json";
+const teliLogo = teliLogoAsset.url;
 import { Client, type Room, type RemoteTrack } from "../../sdk/src";
 
 export const Route = createFileRoute("/")({
