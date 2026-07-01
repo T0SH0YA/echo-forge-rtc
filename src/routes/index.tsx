@@ -131,8 +131,10 @@ function MeetingRoom() {
         });
       });
 
-      // 3. publica
-      await room.publishCamera({ video: hasVideo, audio: true });
+      // 3. publica as tracks do stream JÁ capturado (para que toggleMic/Cam funcione)
+      for (const track of stream.getTracks()) {
+        await room.publishTrack(track);
+      }
 
       setPhase("in-call");
     } catch (err) {
