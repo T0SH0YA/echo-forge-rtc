@@ -2,12 +2,13 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useChat } from "../hooks/useChat";
 import { ChatPanel } from "../components/ChatPanel";
+import teliLogo from "../../teli-logo.png?url";
 import { Client, type Room, type RemoteTrack } from "../../sdk/src";
 
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Sala — WebRTC próprio" },
+      { title: "Teli — Vídeo e chat em tempo real" },
       {
         name: "description",
         content:
@@ -155,7 +156,11 @@ function MeetingRoom() {
     return (
       <div className="min-h-screen bg-background text-foreground flex items-center justify-center px-4">
         <div className="w-full max-w-md rounded-2xl border border-border bg-card p-8 shadow-sm">
-          <h1 className="text-2xl font-semibold tracking-tight">Entrar na sala</h1>
+          <div className="mb-6 flex flex-col items-center gap-3 text-center">
+            <img src={teliLogo} alt="Teli" className="h-12 w-auto" />
+            <h1 className="text-2xl font-semibold tracking-tight">Sua reunião começa aqui</h1>
+            <p className="text-sm text-muted-foreground">Vídeo e chat em tempo real, direto no navegador.</p>
+          </div>
           <p className="mt-1 text-sm text-muted-foreground">
             Stack WebRTC 100% próprio. Sem Zoom, sem Meet.
           </p>
@@ -232,7 +237,7 @@ function MeetingRoom() {
       <div className="flex min-w-0 flex-1 flex-col">
       <header className="flex items-center justify-between border-b border-border px-4 py-3">
         <div className="min-w-0">
-          <div className="text-xs uppercase tracking-wide text-muted-foreground">Sala</div>
+          <img src={teliLogo} alt="Teli" className="h-5 w-auto" />
           <div className="truncate text-sm font-medium">{roomId}</div>
         </div>
         <button
