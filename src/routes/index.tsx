@@ -158,13 +158,10 @@ function MeetingRoom() {
       <div className="min-h-screen bg-background text-foreground flex items-center justify-center px-4">
         <div className="w-full max-w-md rounded-2xl border border-border bg-card p-8 shadow-sm">
           <div className="mb-6 flex flex-col items-center gap-3 text-center">
-            <img src={teliLogo} alt="Teli" className="h-12 w-auto" />
+            <img src={teliLogo} alt="Teli" className="h-32 w-auto" />
             <h1 className="text-2xl font-semibold tracking-tight">Sua reunião começa aqui</h1>
-            <p className="text-sm text-muted-foreground">Vídeo e chat em tempo real, direto no navegador.</p>
           </div>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Stack WebRTC 100% próprio. Sem Zoom, sem Meet.
-          </p>
+
 
           <div className="mt-6 space-y-4">
             <label className="block">
@@ -216,10 +213,6 @@ function MeetingRoom() {
               <p className="text-xs text-red-500 text-center">Erro: {errMsg}</p>
             )}
 
-            <div className="rounded-md bg-muted/50 p-3 text-xs text-muted-foreground leading-relaxed">
-              <strong className="text-foreground">Dica:</strong> abra esta página em outra aba (ou
-              mande o link) com a mesma sala. As duas abas se conectam P2P, sem servidor de mídia.
-            </div>
           </div>
         </div>
       </div>
