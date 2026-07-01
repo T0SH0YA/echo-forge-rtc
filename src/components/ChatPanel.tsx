@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+undefinedimport { useEffect, useRef, useState } from "react";
 import { Send, X } from "lucide-react";
 import type { ChatMessage } from "../hooks/useChat";
 
@@ -15,13 +15,6 @@ function formatTime(ts: number): string {
   } catch {
     return "";
   }
-}
-
-function initials(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return "?";
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
 export function ChatPanel({ open, onClose, messages, onSend }: ChatPanelProps) {
@@ -49,80 +42,79 @@ export function ChatPanel({ open, onClose, messages, onSend }: ChatPanelProps) {
   if (!open) return null;
 
   return (
-    <aside className="flex h-full w-full flex-col border-l border-white/10 bg-card/80 backdrop-blur-xl sm:w-80">
-      <header className="flex items-center justify-between border-b border-white/5 px-4 py-3.5">
-        <h2 className="text-sm font-semibold text-foreground">Mensagens</h2>
+    <aside className="flex h-full w-full flex-col bg-card sm:w-[360px] sm:rounded-2xl sm:border sm:border-border/60">
+      <header className="flex items-center justify-between px-5 pb-3 pt-4">
+        <h2 className="text-base font-semibold text-foreground">Mensagens</h2>
         <button
           type="button"
           onClick={onClose}
           aria-label="Fechar chat"
-          className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground"
+          className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted"
         >
-          <X className="h-4 w-4" />
+          <X className="h-[18px] w-[18px]" />
         </button>
       </header>
 
-      <div ref={listRef} className="flex-1 space-y-4 overflow-auto px-4 py-4">
+      <div ref={listRef} className="flex-1 space-y-4 overflow-y-auto px-5 py-2">
         {messages.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center text-center">
             <p className="text-sm font-medium text-foreground">Nenhuma mensagem ainda</p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              As mensagens ficam visíveis para todos nesta sala.
+            <p className="mt-1 max-w-[220px] text-xs text-muted-foreground">
+              As mensagens enviadas na reuniao aparecem aqui.
             </p>
           </div>
         ) : (
-          messages.map((m) => (
-            <div key={m.id} className={m.self ? "flex flex-col items-end" : "flex flex-col items-start"}>
-              <div className="mb-1 flex items-center gap-2">
-                {!m.self && (
-                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
-                    {initials(m.author)}
+          messages.map((m) => {
+            const mine = m.self;
+            return (
+              <div key={m.id} className={`flex flex-col ${mine ? "items-end" : "items-start"}`}>
+                {!mine && (
+                  <span className="mb-1 px-1 text-xs font-medium text-muted-foreground">
+                    {m.author}
                   </span>
                 )}
-                <span className="text-xs font-medium text-foreground">
-                  {m.self ? "Você" : m.author}
+                <div
+                  className={`max-w-[85%] rounded-2xl px-3.5 py-2 text-sm leading-relaxed ${
+                    mine
+                      ? "rounded-br-md bg-primary text-primary-foreground"
+                      : "rounded-bl-md bg-muted text-foreground"
+                  }`}
+                >
+                  <p className="whitespace-pre-wrap break-words">{m.text}</p>
+                </div>
+                <span className="mt-1 px-1 text-[11px] text-muted-foreground">
+                  {formatTime(m.ts)}
                 </span>
-                <span className="text-[10px] text-muted-foreground">{formatTime(m.ts)}</span>
               </div>
-              <div
-                className={
-                  m.self
-                    ? "max-w-[85%] rounded-2xl rounded-tr-sm bg-primary px-3.5 py-2 text-sm text-primary-foreground shadow-md shadow-primary/20"
-                    : "max-w-[85%] rounded-2xl rounded-tl-sm bg-white/10 px-3.5 py-2 text-sm text-foreground ring-1 ring-white/5"
-                }
-              >
-                <span className="whitespace-pre-wrap break-words leading-relaxed">{m.text}</span>
-              </div>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
 
-      <div className="border-t border-white/5 p-3">
-        <div className="flex items-end gap-2 rounded-2xl border border-input bg-background/60 px-3.5 py-2.5 transition focus-within:border-primary/60 focus-within:ring-2 focus-within:ring-primary/40">
+      <div className="p-3">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            submit();
+          }}
+          className="flex items-center gap-2 rounded-full border border-border/60 bg-background py-1.5 pl-4 pr-1.5 transition-colors focus-within:border-primary"
+        >
           <input
             ref={inputRef}
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                submit();
-              }
-            }}
-            placeholder="Enviar mensagem para todos"
-            className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
+            placeholder="Enviar mensagem"
+            className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
           />
           <button
-            type="button"
-            onClick={submit}
+            type="submit"
             disabled={!draft.trim()}
-            aria-label="Enviar"
-            className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-md shadow-primary/25 transition hover:bg-primary/90 hover:scale-105 active:scale-95 disabled:opacity-40 disabled:shadow-none"
+            aria-label="Enviar mensagem"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-40"
           >
             <Send className="h-4 w-4" />
           </button>
-        </div>
+        </form>
       </div>
     </aside>
   );
