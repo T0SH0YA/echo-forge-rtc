@@ -1,29 +1,91 @@
-## Objetivo
-Apontar o SDK do preview Lovable para o seu signaling em produção (`wss://sig.teli.app.br`) e validar que duas pessoas em redes/dispositivos diferentes entram na mesma sala.
+## Recomendação: iframe embed com postMessage, não API REST
 
-## Passos
+Pra videoconferência em MFE, **iframe é o padrão da indústria** (Zoom, Whereby, Daily, Jitsi todos fazem assim). Motivo técnico: getUserMedia, WebRTC, DTLS e permissões de câmera/mic são acoplados ao *browsing context*. Se você tentar expor só via API REST, a Teli teria que reimplementar toda a camada de mídia — perde o ponto de ser MFE.
 
-1. **Definir a variável no Lovable**
-   - Adicionar `VITE_SIGNALING_URL=wss://sig.teli.app.br` no `.env` do projeto (Lovable lê variáveis `VITE_*` em build/preview).
-   - Nenhuma mudança de código necessária: `src/routes/index.tsx` já faz `import.meta.env.VITE_SIGNALING_URL` com fallback pro `bc://`.
+API REST entra como **complemento**, não substituto: usada pelo backend da Teli pra emitir tokens de sala (server-to-server), nunca pelo front.
 
-2. **Healthcheck rápido do servidor** (eu rodo `curl` quando estiver em build mode)
-   - `curl -i https://sig.teli.app.br/healthz` → espera `200 ok`.
-   - `curl -i -H "Upgrade: websocket" -H "Connection: Upgrade" -H "Sec-WebSocket-Version: 13" -H "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==" https://sig.teli.app.br/v1/rooms/ping?token=test` → espera `101 Switching Protocols`.
-   - Se algum falhar, paro e te mostro o output antes de prosseguir (provável: DNS ainda não propagou, Caddy ainda emitindo cert, ou porta 443 fechada no firewall do Lightsail).
+## Arquitetura proposta
 
-3. **Validar no preview**
-   - Recarregar o preview do Lovable, abrir DevTools → Network → WS e confirmar conexão `wss://sig.teli.app.br/v1/rooms/<roomId>` com status `101`.
-   - Confirmar que a mensagem `welcome` chega com `peerId` real do servidor Go (não mais `p_xxxx` do BroadcastChannel).
+```text
+┌─────────────── teli.app.br (Lovable) ───────────────┐
+│                                                     │
+│   <TeliMeeting roomId="x" token="jwt" />            │
+│         │                                           │
+│         ▼                                           │
+│   <iframe src="echo-forge-rtc.lovable.app/embed     │
+│                ?room=x&token=jwt"                   │
+│           allow="camera; microphone; display-capture│
+│                  ; autoplay" />                     │
+│         ▲    ▲                                      │
+│         │    │ postMessage (eventos + comandos)     │
+│         │    │                                      │
+└─────────┼────┼──────────────────────────────────────┘
+          │    │
+┌─────────▼────▼─── echo-forge-rtc (este app) ────────┐
+│  /embed  → sala renderizada, sem lobby, sem header  │
+│  /       → app standalone (continua funcionando)    │
+│  /api/token → REST: backend Teli troca api-key      │
+│               por JWT de sala (server-to-server)    │
+│                                                     │
+│  Signaling: wss://sig.teli.app.br (já no ar)        │
+└─────────────────────────────────────────────────────┘
+```
 
-4. **Teste fim-a-fim entre dispositivos**
-   - Abrir o preview no PC, entrar na sala, copiar link.
-   - Abrir o mesmo link no celular (4G, fora do Wi-Fi) e confirmar vídeo+áudio bidirecional.
-   - Se ICE não conectar entre redes NAT diferentes, é sinal de que falta TURN configurado no SDK — nesse caso, próxima etapa será expor TURN via `sig.teli.app.br` (ou subdomínio `turn.teli.app.br`) e injetar `iceServers` no `welcome` do signaling.
+Cada app deploya no seu próprio ciclo. Zero dependência de código. Contrato = URL + postMessage + REST de token.
 
-## O que NÃO faço nesta etapa
-- Não mexo no servidor Go nem no Caddyfile (já estão no ar segundo você).
-- Não adiciono UI nova; só ligo o cabo.
+## O que a plano constrói neste app
 
-## Pergunta antes de implementar
-Quer que eu já configure o STUN/TURN próprios (`stun:sig.teli.app.br:3478` / `turn:sig.teli.app.br:3478`) no `welcome` do signaling agora, ou primeiro só valida P2P puro com este signaling e tratamos TURN como próxima etapa se a conexão entre redes diferentes falhar?
+### 1. Rota `/embed` (nova)
+Versão "sem lobby" do `src/routes/index.tsx`: lê `room`, `token`, `name`, `theme` da querystring, entra direto na sala, UI compacta pra caber em iframe. O `/` continua igual pra uso standalone.
+
+### 2. Bridge postMessage (`src/lib/embed-bridge.ts`)
+Contrato tipado dos dois lados:
+
+- **Eventos emitidos pra parent** (Teli escuta): `ready`, `joined`, `peer-joined`, `peer-left`, `left`, `error`, `permission-denied`, `device-changed`.
+- **Comandos recebidos do parent** (Teli chama): `mute`, `unmute`, `camera-off`, `camera-on`, `leave`, `switch-device`.
+- Validação de `event.origin` contra allowlist (`https://*.teli.app.br`, `http://localhost:*` em dev).
+
+### 3. Rota `POST /api/token` (server route)
+Endpoint público server-to-server: recebe `{ apiKey, roomId, userId, ttl }`, valida `apiKey` (secret `TELI_API_KEY`), retorna JWT curto assinado (secret `SIGNALING_JWT_SECRET`). Backend da Teli chama isso; front nunca vê a apiKey. O signaling Go (já rodando em `sig.teli.app.br`) passa a validar esse JWT — pequena mudança em `server/signaling/main.go` numa fase seguinte, opcional agora.
+
+### 4. Snippet de integração pra Teli (`docs/embed.md`)
+Componente React pronto pra colar no app da Teli:
+
+```tsx
+<iframe
+  src={`https://echo-forge-rtc.lovable.app/embed?room=${roomId}&token=${token}`}
+  allow="camera; microphone; display-capture; autoplay"
+  className="w-full h-full border-0"
+/>
+```
+
+Mais o hook `useTeliMeeting()` que faz o postMessage handshake.
+
+### 5. Headers de embed
+Ajustar resposta pra permitir iframe só de origens Teli: `Content-Security-Policy: frame-ancestors https://*.teli.app.br https://teli.app.br http://localhost:*`. Bloqueia clickjacking de qualquer outro site.
+
+## Por que NÃO só API REST
+
+- WebRTC precisa rodar no browser do usuário final; REST não transporta mídia.
+- getUserMedia exige `allow="camera; microphone"` que só o *frame* que renderiza a UI recebe.
+- Reconexão, ICE restart, jitter buffer, seleção de camada — tudo state client-side que a Teli teria que reimplementar.
+
+REST fica só pra: emitir token, listar salas ativas, encerrar sala remotamente, buscar gravação — coisas que o *backend* da Teli precisa, não o front.
+
+## Por que NÃO Web Component / NPM package
+
+- **Web Component**: compartilha DOM/CSS com a Teli → conflito de estilos, e ainda assim precisa dos mesmos permissions do iframe. Só faz sentido se você quer que a Teli controle o layout dos tiles de vídeo pixel a pixel.
+- **NPM package**: acopla os ciclos de build. Toda mudança neste app obriga a Teli a fazer `bun add`, rebuild, redeploy. Perde a independência que você pediu.
+
+## Segurança
+
+- CORS estrito no `/api/token` (só origens Teli).
+- `frame-ancestors` estrito no `/embed`.
+- Token JWT com TTL curto (ex: 2h) e `roomId` embutido — mesmo vazando, só serve pra uma sala.
+- `apiKey` da Teli nunca sai do backend dela.
+
+## Fora de escopo neste plano
+
+- Mudança no signaling Go pra validar JWT (posso fazer depois; hoje ele aceita qualquer `token`).
+- SDK npm (podemos publicar mais tarde como *alternativa* ao iframe, sem remover o iframe).
+- UI do lado da Teli (fica pro outro projeto Lovable).
