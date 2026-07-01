@@ -4,6 +4,11 @@ Este app é um MFE independente. A Teli embeda via `<iframe>` e conversa
 com ele por `postMessage`. Zero acoplamento de código, ciclos de deploy
 separados.
 
+- **URL publicada deste MFE:** `https://echo-forge-rtc.lovable.app`
+- **Endpoint de token:** `POST https://echo-forge-rtc.lovable.app/api/public/token`
+- **Rota de embed:** `https://echo-forge-rtc.lovable.app/embed`
+- **Signaling:** `wss://sig.teli.app.br`
+
 ## 1. Backend Teli emite o token da sala
 
 Toda sala precisa de um JWT curto. O backend da Teli chama este endpoint
@@ -13,7 +18,7 @@ server-to-server (nunca do browser):
 curl -X POST https://echo-forge-rtc.lovable.app/api/public/token \
   -H "Content-Type: application/json" \
   -d '{
-    "apiKey": "'"$TELI_API_KEY"'",
+    "apiKey": "'"$TELI_RTC_API_KEY"'",
     "roomId": "meeting-123",
     "userId": "user-abc",
     "ttlSeconds": 7200
@@ -26,12 +31,30 @@ Resposta:
 { "token": "eyJhbGciOi...", "expiresAt": 1730000000 }
 ```
 
-- `TELI_API_KEY` já está provisionada neste projeto (segredo). Peça o valor
-  em Project → Secrets e configure no backend da Teli.
-- Token tem TTL curto e carrega `roomId`, `userId` — se vazar, só serve
-  pra uma sala.
+Token tem TTL curto e carrega `roomId`, `userId` — se vazar, só serve
+pra uma sala.
 
-## 2. Front da Teli renderiza o iframe
+## 2. Configuração dos secrets
+
+### Neste projeto (echo-forge-rtc)
+
+| Secret                  | Uso                                                     |
+| ----------------------- | ------------------------------------------------------- |
+| `TELI_API_KEY`          | Autentica requisições vindas do backend da Teli.        |
+| `SIGNALING_JWT_SECRET`  | Assina o JWT de sala (HS256). Mesmo secret no Go signaling. |
+
+### No projeto Teli — atenção pra NÃO trocar os valores
+
+| Secret (na Teli)    | Valor exato                                             |
+| ------------------- | ------------------------------------------------------- |
+| `TELI_RTC_TOKEN_URL`| `https://echo-forge-rtc.lovable.app/api/public/token`   |
+| `TELI_RTC_API_KEY`  | O mesmo valor de `TELI_API_KEY` deste projeto           |
+
+> **Secrets no Lovable são write-only.** Depois de salvos você não consegue
+> lê-los de novo. Se perdeu o valor da `TELI_API_KEY`, gere um novo aqui e
+> atualize `TELI_RTC_API_KEY` na Teli — os dois têm que bater exatamente.
+
+## 3. Front da Teli renderiza o iframe
 
 ```tsx
 // No app da Teli (Lovable)
@@ -60,7 +83,7 @@ export function TeliMeeting({ roomId, token, userName }: {
 `allow="camera; microphone"` é obrigatório — sem ele o browser bloqueia
 `getUserMedia` dentro do iframe.
 
-## 3. Comunicação bidirecional (postMessage)
+## 4. Comunicação bidirecional (postMessage)
 
 ### Eventos emitidos pelo iframe (Teli escuta)
 
@@ -109,7 +132,55 @@ function sendCmd(iframe: HTMLIFrameElement, cmd: object) {
 sendCmd(iframeRef.current!, { t: "leave" });
 ```
 
-## 4. Independência
+## 5. Smoke test (rode depois de configurar os secrets)
+
+Substitua `<TELI_RTC_API_KEY>` pelo valor real (server-side, nunca no browser):
+
+```bash
+curl -i -X POST https://echo-forge-rtc.lovable.app/api/public/token \
+  -H "Content-Type: application/json" \
+  -d '{"apiKey":"<TELI_RTC_API_KEY>","roomId":"teste-1","userId":"user-1"}'
+```
+
+- `200` + `{"token":"eyJ...","expiresAt":...}` → tudo certo, é só o front da Teli montar o iframe com esse token.
+- `401 unauthorized` → a `TELI_RTC_API_KEY` da Teli não bate com `TELI_API_KEY` daqui.
+- `400 invalid roomId/userId` → id fora do regex permitido (ver Troubleshooting).
+- `500 server not configured` → falta `TELI_API_KEY` ou `SIGNALING_JWT_SECRET` neste projeto.
+
+## 6. Troubleshooting
+
+### `TypeError: Invalid URL: 'j4CptPSq6R...'` no edge function da Teli
+Os secrets foram **trocados** na hora de salvar: o valor da API key foi salvo
+em `TELI_RTC_TOKEN_URL`, então o `fetch()` tenta bater numa URL que não é URL.
+Corrija conforme a tabela na seção 2 — URL vai no `_URL`, chave vai no `_API_KEY`.
+
+### `401 unauthorized` do `/api/public/token`
+`TELI_RTC_API_KEY` (na Teli) ≠ `TELI_API_KEY` (aqui). Como secrets são
+write-only, o jeito seguro é: gerar novo valor aqui, atualizar lá, salvar
+os dois com o mesmo valor.
+
+### `400 invalid roomId` ou `400 invalid userId`
+- `roomId` precisa casar `^[a-zA-Z0-9_-]{1,128}$`
+- `userId` precisa casar `^[a-zA-Z0-9_.-]{1,128}$`
+
+Sem espaço, sem acento, sem `@`, sem `/`. Se o id da Teli tem esses
+caracteres, hash/slugify antes de mandar.
+
+### Iframe carrega mas o browser não pede câmera/microfone
+Faltou `allow="camera; microphone"` no `<iframe>`. Sem essa policy o
+`getUserMedia` é bloqueado silenciosamente dentro do iframe.
+
+### `postMessage` do parent chega no iframe mas é ignorado
+A origem do parent não está na allowlist de `src/lib/embed-bridge.ts`
+(`DEFAULT_ALLOWED_ORIGINS`). Por padrão liberamos `*.teli.app.br`,
+`*.lovable.app` e `localhost`. Domínio custom novo precisa entrar lá.
+
+### Eventos do iframe não chegam no parent
+Confira que o listener no parent filtra por
+`e.origin === "https://echo-forge-rtc.lovable.app"` — se estiver comparando
+com outra URL (ex: preview vs. published), os eventos são descartados.
+
+## 7. Independência
 
 - Este app roda standalone em `/` (lobby próprio pra testes).
 - A rota `/embed` é a superfície MFE.
@@ -118,7 +189,7 @@ sendCmd(iframeRef.current!, { t: "leave" });
 - Deploy dos dois lados é independente. Mudanças aqui não quebram a Teli
   enquanto o contrato acima não mudar.
 
-## 5. Segurança
+## 8. Segurança
 
 - `/api/public/token` valida `TELI_API_KEY` com comparação timing-safe e
   restringe CORS a `*.teli.app.br`.
