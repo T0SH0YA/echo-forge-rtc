@@ -1,4 +1,4 @@
-undefinedimport { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Send, X } from "lucide-react";
 import type { ChatMessage } from "../hooks/useChat";
 
