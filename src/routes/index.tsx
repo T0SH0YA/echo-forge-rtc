@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Mic, MicOff, Video, VideoOff, MessageSquare, PhoneOff, Copy, Check } from "lucide-react";
 import { useChat } from "../hooks/useChat";
 import { ChatPanel } from "../components/ChatPanel";
 import teliLogoAsset from "../assets/teli-logo.png.asset.json";
