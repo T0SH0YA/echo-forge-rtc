@@ -171,7 +171,7 @@ function MeetingRoom() {
             return entry.stream.getTracks().length > 0 ? [entry] : [];
           }),
         );
-        });
+      });
 
       // 3. publica as tracks do stream JÁ capturado (para que toggleMic/Cam funcione)
       for (const track of stream.getTracks()) {
