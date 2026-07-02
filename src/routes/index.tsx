@@ -80,6 +80,7 @@ function MeetingRoom() {
     ...remotes.map((r) => ({ id: r.peerId, stream: r.stream })),
   ];
   const activeSpeaker = useActiveSpeaker(speakerSources);
+  const peerNames = usePresence(room, name);
 
   // Signaling: usa VITE_SIGNALING_URL se definido (ex: wss://sig.teli.app.br),
   // senão cai no loopback bc:// (só funciona entre abas do mesmo navegador).
