@@ -169,6 +169,16 @@ function MeetingRoom() {
   };
 
   const leave = async () => {
+    // Dispara organização com IA se houver transcrição
+    const fullText = transcription.getFullText();
+    const participants = [name || "Você", ...remotes.map((r) => r.peerId)];
+    if (transcription.lines.length > 0 && fullText.trim()) {
+      void aiOrganize.organize({
+        transcript: fullText,
+        meetingTitle: `Sala ${roomId}`,
+        participants,
+      });
+    }
     await roomRef.current?.leave();
     roomRef.current = null;
     localStreamRef.current?.getTracks().forEach((t) => t.stop());
