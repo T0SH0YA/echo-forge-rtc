@@ -13,7 +13,7 @@ import { useAIOrganize } from "../hooks/useAIOrganize";
 import { AIReportModal } from "../components/AIReportModal";
 import teliLogoAsset from "../assets/teli-logo.png.asset.json";
 const teliLogo = teliLogoAsset.url;
-import { Client, type Room, type RemoteTrack } from "../../sdk/src";
+import { Client, type Room } from "../../sdk/src";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -320,7 +320,7 @@ function MeetingRoom() {
         ? [{ peerId: "screen", stream: screen.screenStream, label: "Sua tela", local: true }]
         : []),
     { peerId: "local", stream: localStreamRef.current, label: `${name} (você)`, local: true },
-    ...remotes.map((r, index, all) => {
+    ...remotes.map((r, _index, all) => {
       const name = peerNames[r.peerId] || "Participante";
       const peerStreams = all.filter((entry) => entry.peerId === r.peerId);
       const isExtraVideoStream = r.stream.getVideoTracks().length > 0 && peerStreams.findIndex((entry) => entry.id === r.id) > 0;
