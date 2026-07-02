@@ -304,6 +304,8 @@ function MeetingRoom() {
   const cols = tiles.length === 1 ? "grid-cols-1" : tiles.length === 2 ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-2 lg:grid-cols-3";
 
   return (
+    <>
+    {aiModal}
     <div className="flex h-[100dvh] bg-background text-foreground">
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex items-center justify-between px-3 py-2.5 sm:px-5 sm:py-3">
@@ -428,13 +430,23 @@ function MeetingRoom() {
               onToggle={transcription.toggle}
               onClear={transcription.clear}
               getFullText={transcription.getFullText}
+              organizing={aiOrganize.loading}
+              onOrganize={() =>
+                aiOrganize.organize({
+                  transcript: transcription.getFullText(),
+                  meetingTitle: `Sala ${roomId}`,
+                  participants: [name || "Você", ...remotes.map((r) => r.peerId)],
+                })
+              }
             />
           </div>
         </>
       )}
     </div>
+    </>
   );
 }
+
 
 function VideoEl({ stream, muted }: { stream: MediaStream | null; muted?: boolean }) {
   const ref = useRef<HTMLVideoElement>(null);
