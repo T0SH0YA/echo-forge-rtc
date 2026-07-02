@@ -542,6 +542,3 @@ function CtrlBtn({
     </button>
   );
 }
-
-// Suppress unused import warning — RemoteTrack tipa eventos do SDK.
-type _Keep = RemoteTrack;
