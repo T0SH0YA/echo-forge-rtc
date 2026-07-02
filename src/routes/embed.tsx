@@ -156,7 +156,7 @@ function EmbedRoom() {
             return entry.stream.getTracks().length > 0 ? [entry] : [];
           }),
         );
-        });
+      });
 
       await r.publishCamera({ video: true, audio: true });
       setStatus("joined");
