@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as EmbedRouteImport } from './routes/embed'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ApiOrganizeTranscriptRouteImport } from './routes/api/organize-transcript'
 import { Route as ApiPublicTokenRouteImport } from './routes/api/public/token'
 
 const EmbedRoute = EmbedRouteImport.update({
@@ -23,6 +24,11 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiOrganizeTranscriptRoute = ApiOrganizeTranscriptRouteImport.update({
+  id: '/api/organize-transcript',
+  path: '/api/organize-transcript',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicTokenRoute = ApiPublicTokenRouteImport.update({
   id: '/api/public/token',
   path: '/api/public/token',
@@ -32,30 +38,39 @@ const ApiPublicTokenRoute = ApiPublicTokenRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/embed': typeof EmbedRoute
+  '/api/organize-transcript': typeof ApiOrganizeTranscriptRoute
   '/api/public/token': typeof ApiPublicTokenRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/embed': typeof EmbedRoute
+  '/api/organize-transcript': typeof ApiOrganizeTranscriptRoute
   '/api/public/token': typeof ApiPublicTokenRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/embed': typeof EmbedRoute
+  '/api/organize-transcript': typeof ApiOrganizeTranscriptRoute
   '/api/public/token': typeof ApiPublicTokenRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/embed' | '/api/public/token'
+  fullPaths: '/' | '/embed' | '/api/organize-transcript' | '/api/public/token'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/embed' | '/api/public/token'
-  id: '__root__' | '/' | '/embed' | '/api/public/token'
+  to: '/' | '/embed' | '/api/organize-transcript' | '/api/public/token'
+  id:
+    | '__root__'
+    | '/'
+    | '/embed'
+    | '/api/organize-transcript'
+    | '/api/public/token'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   EmbedRoute: typeof EmbedRoute
+  ApiOrganizeTranscriptRoute: typeof ApiOrganizeTranscriptRoute
   ApiPublicTokenRoute: typeof ApiPublicTokenRoute
 }
 
@@ -75,6 +90,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/organize-transcript': {
+      id: '/api/organize-transcript'
+      path: '/api/organize-transcript'
+      fullPath: '/api/organize-transcript'
+      preLoaderRoute: typeof ApiOrganizeTranscriptRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/token': {
       id: '/api/public/token'
       path: '/api/public/token'
@@ -88,18 +110,9 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   EmbedRoute: EmbedRoute,
+  ApiOrganizeTranscriptRoute: ApiOrganizeTranscriptRoute,
   ApiPublicTokenRoute: ApiPublicTokenRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}

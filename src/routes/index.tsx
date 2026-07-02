@@ -8,6 +8,8 @@ import { useActiveSpeaker } from "../hooks/useActiveSpeaker";
 import { useScreenShare } from "../hooks/useScreenShare";
 import { useRecorder } from "../hooks/useRecorder";
 import { useTranscription } from "../hooks/useTranscription";
+import { useAIOrganize } from "../hooks/useAIOrganize";
+import { AIReportModal } from "../components/AIReportModal";
 import teliLogoAsset from "../assets/teli-logo.png.asset.json";
 const teliLogo = teliLogoAsset.url;
 import { Client, type Room, type RemoteTrack } from "../../sdk/src";
@@ -54,6 +56,12 @@ function MeetingRoom() {
   const [room, setRoom] = useState<Room | null>(null);
   const [chatOpen, setChatOpen] = useState(false);
   const [transcriptOpen, setTranscriptOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const localVideoRef = useRef<HTMLVideoElement>(null);
+  const roomRef = useRef<Room | null>(null);
+  const localStreamRef = useRef<MediaStream | null>(null);
+
   const chat = useChat(room, name);
   const screen = useScreenShare(room);
   const recorder = useRecorder(localStreamRef.current, (blob, filename) => {
@@ -65,16 +73,12 @@ function MeetingRoom() {
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   });
   const transcription = useTranscription(room, name || "Voce");
+  const aiOrganize = useAIOrganize();
   const speakerSources = [
     { id: "local", stream: localStreamRef.current },
     ...remotes.map((r) => ({ id: r.peerId, stream: r.stream })),
   ];
   const activeSpeaker = useActiveSpeaker(speakerSources);
-  const [copied, setCopied] = useState(false);
-
-  const localVideoRef = useRef<HTMLVideoElement>(null);
-  const roomRef = useRef<Room | null>(null);
-  const localStreamRef = useRef<MediaStream | null>(null);
 
   // Signaling: usa VITE_SIGNALING_URL se definido (ex: wss://sig.teli.app.br),
   // senão cai no loopback bc:// (só funciona entre abas do mesmo navegador).
@@ -165,6 +169,16 @@ function MeetingRoom() {
   };
 
   const leave = async () => {
+    // Dispara organização com IA se houver transcrição
+    const fullText = transcription.getFullText();
+    const participants = [name || "Você", ...remotes.map((r) => r.peerId)];
+    if (transcription.lines.length > 0 && fullText.trim()) {
+      void aiOrganize.organize({
+        transcript: fullText,
+        meetingTitle: `Sala ${roomId}`,
+        participants,
+      });
+    }
     await roomRef.current?.leave();
     roomRef.current = null;
     localStreamRef.current?.getTracks().forEach((t) => t.stop());
@@ -198,9 +212,22 @@ function MeetingRoom() {
     } catch {}
   };
 
+  const aiModal = (
+    <AIReportModal
+      open={aiOrganize.open}
+      onClose={aiOrganize.close}
+      loading={aiOrganize.loading}
+      error={aiOrganize.error}
+      report={aiOrganize.report}
+      meetingTitle={`Sala ${roomId}`}
+    />
+  );
+
   // ---------- LOBBY ----------
   if (phase === "lobby" || phase === "joining" || phase === "ended" || phase === "error") {
     return (
+      <>
+      {aiModal}
       <div className="flex min-h-[100dvh] items-center justify-center bg-background px-4 text-foreground">
         <div className="w-full max-w-md rounded-2xl border border-border/60 bg-card p-8 shadow-xl">
           <div className="mb-8 flex flex-col items-center gap-4 text-center">
@@ -262,6 +289,7 @@ function MeetingRoom() {
           </div>
         </div>
       </div>
+      </>
     );
   }
 
@@ -276,6 +304,8 @@ function MeetingRoom() {
   const cols = tiles.length === 1 ? "grid-cols-1" : tiles.length === 2 ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-2 lg:grid-cols-3";
 
   return (
+    <>
+    {aiModal}
     <div className="flex h-[100dvh] bg-background text-foreground">
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex items-center justify-between px-3 py-2.5 sm:px-5 sm:py-3">
@@ -400,13 +430,23 @@ function MeetingRoom() {
               onToggle={transcription.toggle}
               onClear={transcription.clear}
               getFullText={transcription.getFullText}
+              organizing={aiOrganize.loading}
+              onOrganize={() =>
+                aiOrganize.organize({
+                  transcript: transcription.getFullText(),
+                  meetingTitle: `Sala ${roomId}`,
+                  participants: [name || "Você", ...remotes.map((r) => r.peerId)],
+                })
+              }
             />
           </div>
         </>
       )}
     </div>
+    </>
   );
 }
+
 
 function VideoEl({ stream, muted }: { stream: MediaStream | null; muted?: boolean }) {
   const ref = useRef<HTMLVideoElement>(null);

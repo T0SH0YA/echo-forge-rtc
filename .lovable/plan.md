@@ -1,27 +1,30 @@
-## Atualizar `docs/embed.md`
+# Organização automática da transcrição com IA
 
-Refletir o estado atual do projeto (URL publicada, secrets configurados) e adicionar troubleshooting pro caso "secrets trocados" que a gente acabou de resolver.
+Ao encerrar a chamada, o texto acumulado da transcrição é enviado para um endpoint server-side que chama `openai/gpt-5-mini` via Lovable AI Gateway e devolve 4 blocos: **Resumo executivo**, **Tópicos e decisões**, **Action items** e **Ata formatada**. O resultado aparece num modal com opções de copiar e baixar `.md`.
 
-### Mudanças
+## Backend
 
-1. **Confirmar URL publicada** em todos os exemplos: `https://echo-forge-rtc.lovable.app` (já está, só revisar consistência).
+**Novo:** `src/routes/api/organize-transcript.ts` (server route, streaming POST).
+- Recebe `{ transcript: string, meetingTitle?: string, participants?: string[] }`.
+- Usa helper Lovable AI Gateway (`src/lib/ai-gateway.server.ts`) — cria se não existir, seguindo o padrão da knowledge `ai-sdk-lovable-gateway`.
+- `streamText` com `model = gateway("openai/gpt-5-mini")` e `providerOptions.lovable.service_tier: "priority"` (gpt-5-mini suporta fast mode).
+- Structured output com `Output.object` (Zod schema com os 4 campos), provider criado com `{ structuredOutputs: true }`.
+- System prompt em PT-BR pedindo os 4 blocos; trata 402 (créditos) e 429 (rate limit) devolvendo status apropriado.
+- `LOVABLE_API_KEY` é auto-provisionado (checar/criar via `ai_gateway--create`).
 
-2. **Nova seção "Configuração dos secrets na Teli"** — deixar explícito o que vai em cada nome, pra não trocar de novo:
+## Frontend
 
-   | Secret (na Teli) | Valor |
-   |---|---|
-   | `TELI_RTC_TOKEN_URL` | `https://echo-forge-rtc.lovable.app/api/public/token` |
-   | `TELI_RTC_API_KEY` | mesmo valor de `TELI_API_KEY` deste projeto |
+**Novo:** `src/components/AIReportModal.tsx` — modal com abas (Resumo / Tópicos / Action items / Ata), estados loading/erro/pronto, botões **Copiar** e **Baixar .md**.
 
-3. **Nova seção "Troubleshooting"** com os erros mais comuns:
-   - `TypeError: Invalid URL` no edge function da Teli → secrets trocados (URL foi salva no campo de API key).
-   - `401 unauthorized` do `/api/public/token` → `TELI_RTC_API_KEY` da Teli ≠ `TELI_API_KEY` daqui.
-   - `400 invalid roomId/userId` → regex `^[a-zA-Z0-9_-]{1,128}$` / `^[a-zA-Z0-9_.-]{1,128}$`.
-   - Iframe abre mas câmera não pede permissão → faltou `allow="camera; microphone"`.
-   - `postMessage` do parent ignorado → origem não bate com a allowlist de `src/lib/embed-bridge.ts`.
+**Novo:** `src/hooks/useAIOrganize.ts` — dispara POST para `/api/organize-transcript`, gerencia loading/erro/resultado.
 
-4. **Curl de smoke test** já pronto pra colar (com a URL real, não placeholder), pra validar rápido depois de configurar os secrets.
+**Alterado:** `src/routes/index.tsx` — ao clicar em sair (PhoneOff), se `transcript.lines.length > 0` chama `organize(getFullText())` e mostra o modal; usuário pode fechar sem organizar.
 
-5. **Nota sobre secrets write-only**: lembrar que no Lovable os secrets não são legíveis depois de salvos — se perder o valor, gerar novo e atualizar dos dois lados.
+**Alterado:** `src/components/TranscriptPanel.tsx` — corrigir o arquivo (hoje está duplicado — dois `import`/duas definições do mesmo componente causando parse error) e adicionar botão manual "Organizar com IA" no rodapé como atalho opcional.
 
-Só documentação. Nenhum código de app/servidor é alterado.
+## Notas técnicas
+
+- Modelo: `openai/gpt-5-mini` (GPT-4o mini não existe no gateway; este é o equivalente moderno recomendado).
+- Chamada 100% server-side; `LOVABLE_API_KEY` nunca vai pro browser.
+- Transcrição continua sendo gerada no cliente (Web Speech API) como já é hoje — a IA só organiza o texto final.
+- Custo é debitado dos créditos da workspace por request.
