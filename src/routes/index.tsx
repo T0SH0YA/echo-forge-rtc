@@ -8,6 +8,7 @@ import { useActiveSpeaker } from "../hooks/useActiveSpeaker";
 import { useScreenShare } from "../hooks/useScreenShare";
 import { useRecorder } from "../hooks/useRecorder";
 import { useTranscription } from "../hooks/useTranscription";
+import { usePresence } from "../hooks/usePresence";
 import { useAIOrganize } from "../hooks/useAIOrganize";
 import { AIReportModal } from "../components/AIReportModal";
 import teliLogoAsset from "../assets/teli-logo.png.asset.json";
