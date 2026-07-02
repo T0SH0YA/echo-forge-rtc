@@ -42,6 +42,7 @@ export class Room extends Emitter<RoomEvents> {
   private links = new Map<string, PeerLink>();
   private localStream: MediaStream | null = null;
   private localTracks: LocalTrack[] = [];
+  private localPublications: Array<{ local: LocalTrack; stream: MediaStream }> = [];
   private state: ConnectionState = "connecting";
 
   constructor(id: string, private readonly url: string, private readonly token: string) {
@@ -164,10 +165,11 @@ export class Room extends Emitter<RoomEvents> {
     });
     this.links.set(remoteId, link);
 
-    // Se já temos tracks locais, adiciona pra disparar negotiationneeded
-    if (this.localStream) {
-      for (const t of this.localStream.getTracks()) {
-        link.addLocalTrack(t, this.localStream);
+    // Se já temos tracks locais, adiciona TODAS as publicações existentes.
+    // Isso inclui câmera/mic e também tela, que usa um MediaStream separado.
+    for (const pub of this.localPublications) {
+      if (!link.pc.getSenders().some((s) => s.track === pub.local.mediaStreamTrack)) {
+        link.addLocalTrack(pub.local.mediaStreamTrack, pub.stream);
       }
     }
 
@@ -211,6 +213,7 @@ export class Room extends Emitter<RoomEvents> {
     for (const t of stream.getTracks()) {
       const local = new LocalTrack(t.id, t.kind as "audio" | "video", t);
       this.localTracks.push(local);
+      this.localPublications.push({ local, stream });
       if (t.kind === "audio") bundle.audio = local;
       else bundle.video = local;
       for (const peerId of this.peers.keys()) {
@@ -229,6 +232,7 @@ export class Room extends Emitter<RoomEvents> {
     this.localStream = stream;
     const local = new LocalTrack(track.id, track.kind as "audio" | "video", track);
     this.localTracks.push(local);
+    this.localPublications.push({ local, stream });
     for (const link of this.links.values()) {
       link.addLocalTrack(track, stream);
     }
@@ -250,6 +254,7 @@ export class Room extends Emitter<RoomEvents> {
       this.localStream.addTrack(t);
       const local = new LocalTrack(t.id, t.kind as "audio" | "video", t);
       this.localTracks.push(local);
+      this.localPublications.push({ local, stream: this.localStream });
       if (t.kind === "audio") bundle.audio = local;
       else bundle.video = local;
     }
@@ -267,6 +272,7 @@ export class Room extends Emitter<RoomEvents> {
 
   async unpublish(track: LocalTrack): Promise<void> {
     this.localTracks = this.localTracks.filter((t) => t !== track);
+    this.localPublications = this.localPublications.filter((p) => p.local !== track);
     this.localStream?.removeTrack(track.mediaStreamTrack);
     for (const link of this.links.values()) {
       const sender = link.pc.getSenders().find((s) => s.track === track.mediaStreamTrack);
@@ -286,6 +292,7 @@ export class Room extends Emitter<RoomEvents> {
     this.localStream?.getTracks().forEach((t) => t.stop());
     this.localStream = null;
     this.localTracks = [];
+    this.localPublications = [];
     this.transport?.close();
     this.transport = null;
     this.setState("closed");
