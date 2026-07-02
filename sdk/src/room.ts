@@ -61,7 +61,17 @@ export class Room extends Emitter<RoomEvents> {
         if (msg.t === "welcome") {
           clearTimeout(timeout);
           this.localPeerId = msg.data.peerId;
-          this.iceServers = msg.data.iceServers;
+          // Fallback: se o servidor não anunciou STUN/TURN, usa STUN públicos
+          // pra permitir descobrir candidato server-reflexive (senão dá tela
+          // preta entre redes diferentes). Assim que subirmos STUN/TURN
+          // próprios, o servidor passa a anunciar e esses somem.
+          this.iceServers =
+            msg.data.iceServers && msg.data.iceServers.length > 0
+              ? msg.data.iceServers
+              : [
+                  { urls: "stun:stun.l.google.com:19302" },
+                  { urls: "stun:stun.cloudflare.com:3478" },
+                ];
           for (const p of msg.data.peers) {
             const peer: RemotePeer = { id: p.id, role: p.role, tracks: new Map() };
             this.peers.set(p.id, peer);
