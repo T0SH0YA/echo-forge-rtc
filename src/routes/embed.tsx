@@ -212,7 +212,7 @@ function EmbedRoom() {
 
   const tiles = [
     { id: "local", stream: localStreamRef.current, label: `${name || "Você"}`, local: true },
-    ...remotes.map((r, index, all) => {
+    ...remotes.map((r, _index, all) => {
       const peerStreams = all.filter((entry) => entry.peerId === r.peerId);
       const isExtraVideoStream = r.stream.getVideoTracks().length > 0 && peerStreams.findIndex((entry) => entry.id === r.id) > 0;
       return {
