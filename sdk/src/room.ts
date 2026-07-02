@@ -197,8 +197,30 @@ export class Room extends Emitter<RoomEvents> {
   }
 
   async publishScreen(): Promise<LocalTrackBundle> {
-    const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
-    return this.publishStream(stream);
+    // getDisplayMedia com audio pode falhar em alguns navegadores; faz fallback pra so video.
+    let stream: MediaStream;
+    try {
+      stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+    } catch {
+      stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+    }
+    // IMPORTANTE: NAO misturamos a stream de tela com localStream (camera).
+    // Cada track vai pros peers com sua propria stream (msid), assim o remoto
+    // recebe eventos ontrack separados e a preview local mostra so a tela.
+    const bundle: LocalTrackBundle = { stream };
+    for (const t of stream.getTracks()) {
+      const local = new LocalTrack(t.id, t.kind as "audio" | "video", t);
+      this.localTracks.push(local);
+      if (t.kind === "audio") bundle.audio = local;
+      else bundle.video = local;
+      for (const peerId of this.peers.keys()) {
+        const link = this.ensureLink(peerId, true);
+        if (!link.pc.getSenders().some((s) => s.track === t)) {
+          link.addLocalTrack(t, stream);
+        }
+      }
+    }
+    return bundle;
   }
 
   async publishTrack(track: MediaStreamTrack): Promise<LocalTrack> {
