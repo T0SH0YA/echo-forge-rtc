@@ -8,6 +8,7 @@ import { useActiveSpeaker } from "../hooks/useActiveSpeaker";
 import { useScreenShare } from "../hooks/useScreenShare";
 import { useRecorder } from "../hooks/useRecorder";
 import { useTranscription } from "../hooks/useTranscription";
+import { usePresence } from "../hooks/usePresence";
 import { useAIOrganize } from "../hooks/useAIOrganize";
 import { AIReportModal } from "../components/AIReportModal";
 import teliLogoAsset from "../assets/teli-logo.png.asset.json";
@@ -79,6 +80,7 @@ function MeetingRoom() {
     ...remotes.map((r) => ({ id: r.peerId, stream: r.stream })),
   ];
   const activeSpeaker = useActiveSpeaker(speakerSources);
+  const peerNames = usePresence(room, name);
 
   // Signaling: usa VITE_SIGNALING_URL se definido (ex: wss://sig.teli.app.br),
   // senão cai no loopback bc:// (só funciona entre abas do mesmo navegador).
@@ -162,6 +164,10 @@ function MeetingRoom() {
       }
 
       setPhase("in-call");
+      // Auto-inicia transcricao do proprio microfone (cada peer transcreve o seu).
+      setTimeout(() => {
+        try { transcription.start(); } catch { /* nao suportado */ }
+      }, 800);
     } catch (err) {
       setErrMsg((err as Error).message);
       setPhase("error");
@@ -299,7 +305,7 @@ function MeetingRoom() {
         ? [{ peerId: "screen", stream: screen.screenStream, label: "Sua tela", local: true }]
         : []),
     { peerId: "local", stream: localStreamRef.current, label: `${name} (você)`, local: true },
-    ...remotes.map((r) => ({ peerId: r.peerId, stream: r.stream, label: r.peerId, local: false })),
+    ...remotes.map((r) => ({ peerId: r.peerId, stream: r.stream, label: peerNames[r.peerId] || "Participante", local: false })),
   ];
   const cols = tiles.length === 1 ? "grid-cols-1" : tiles.length === 2 ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-2 lg:grid-cols-3";
 
