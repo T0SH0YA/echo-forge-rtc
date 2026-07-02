@@ -65,15 +65,15 @@ export const Route = createFileRoute("/api/organize-transcript")({
           .join("\n");
 
         try {
-          const { experimental_output: output } = await generateText({
+          const result = await generateText({
             model,
-            experimental_output: Output.object({ schema: ReportSchema }),
+            output: Output.object({ schema: ReportSchema }),
             providerOptions: { lovable: { service_tier: "priority" } },
             system:
               "Você é um assistente que organiza transcrições de reuniões em português brasileiro. Seja fiel ao que foi dito, conciso e objetivo. Nunca invente informações. Se algo não estiver claro, omita.",
             prompt: `${header}\n\nTranscrição bruta (linha por fala):\n\n${transcript}`,
           });
-          return Response.json(output);
+          return Response.json(result.output);
         } catch (err) {
           const msg = (err as Error)?.message || "unknown";
           const status = /402/.test(msg)

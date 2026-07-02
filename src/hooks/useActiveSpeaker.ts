@@ -62,7 +62,7 @@ export function useActiveSpeaker(
       let loudestId: string | null = null;
       let loudest = 0;
       for (const [id, { analyser, data }] of m) {
-        analyser.getByteFrequencyData(data);
+        analyser.getByteFrequencyData(data as Uint8Array<ArrayBuffer>);
         let sum = 0;
         for (let i = 0; i < data.length; i++) sum += data[i];
         const avg = sum / data.length;

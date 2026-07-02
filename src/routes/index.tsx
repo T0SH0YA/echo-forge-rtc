@@ -54,6 +54,12 @@ function MeetingRoom() {
   const [room, setRoom] = useState<Room | null>(null);
   const [chatOpen, setChatOpen] = useState(false);
   const [transcriptOpen, setTranscriptOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const localVideoRef = useRef<HTMLVideoElement>(null);
+  const roomRef = useRef<Room | null>(null);
+  const localStreamRef = useRef<MediaStream | null>(null);
+
   const chat = useChat(room, name);
   const screen = useScreenShare(room);
   const recorder = useRecorder(localStreamRef.current, (blob, filename) => {
@@ -65,16 +71,12 @@ function MeetingRoom() {
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   });
   const transcription = useTranscription(room, name || "Voce");
+  const aiOrganize = useAIOrganize();
   const speakerSources = [
     { id: "local", stream: localStreamRef.current },
     ...remotes.map((r) => ({ id: r.peerId, stream: r.stream })),
   ];
   const activeSpeaker = useActiveSpeaker(speakerSources);
-  const [copied, setCopied] = useState(false);
-
-  const localVideoRef = useRef<HTMLVideoElement>(null);
-  const roomRef = useRef<Room | null>(null);
-  const localStreamRef = useRef<MediaStream | null>(null);
 
   // Signaling: usa VITE_SIGNALING_URL se definido (ex: wss://sig.teli.app.br),
   // senão cai no loopback bc:// (só funciona entre abas do mesmo navegador).
