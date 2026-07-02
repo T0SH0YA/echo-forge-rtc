@@ -164,6 +164,10 @@ function MeetingRoom() {
       }
 
       setPhase("in-call");
+      // Auto-inicia transcricao do proprio microfone (cada peer transcreve o seu).
+      setTimeout(() => {
+        try { transcription.start(); } catch { /* nao suportado */ }
+      }, 800);
     } catch (err) {
       setErrMsg((err as Error).message);
       setPhase("error");
