@@ -301,7 +301,7 @@ function MeetingRoom() {
         ? [{ peerId: "screen", stream: screen.screenStream, label: "Sua tela", local: true }]
         : []),
     { peerId: "local", stream: localStreamRef.current, label: `${name} (você)`, local: true },
-    ...remotes.map((r) => ({ peerId: r.peerId, stream: r.stream, label: r.peerId, local: false })),
+    ...remotes.map((r) => ({ peerId: r.peerId, stream: r.stream, label: peerNames[r.peerId] || "Participante", local: false })),
   ];
   const cols = tiles.length === 1 ? "grid-cols-1" : tiles.length === 2 ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-2 lg:grid-cols-3";
 
