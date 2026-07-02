@@ -212,9 +212,22 @@ function MeetingRoom() {
     } catch {}
   };
 
+  const aiModal = (
+    <AIReportModal
+      open={aiOrganize.open}
+      onClose={aiOrganize.close}
+      loading={aiOrganize.loading}
+      error={aiOrganize.error}
+      report={aiOrganize.report}
+      meetingTitle={`Sala ${roomId}`}
+    />
+  );
+
   // ---------- LOBBY ----------
   if (phase === "lobby" || phase === "joining" || phase === "ended" || phase === "error") {
     return (
+      <>
+      {aiModal}
       <div className="flex min-h-[100dvh] items-center justify-center bg-background px-4 text-foreground">
         <div className="w-full max-w-md rounded-2xl border border-border/60 bg-card p-8 shadow-xl">
           <div className="mb-8 flex flex-col items-center gap-4 text-center">
@@ -276,6 +289,7 @@ function MeetingRoom() {
           </div>
         </div>
       </div>
+      </>
     );
   }
 
