@@ -43,8 +43,13 @@ export const Route = createFileRoute("/embed")({
 });
 
 interface Remote {
+  id: string;
   peerId: string;
   stream: MediaStream;
+}
+
+function getRemoteId(peerId: string, stream: MediaStream) {
+  return `${peerId}:${stream.id}`;
 }
 
 function EmbedRoom() {
@@ -132,16 +137,26 @@ function EmbedRoom() {
       });
       r.on("track-subscribed", ({ peer, track, stream: rs }) => {
         setRemotes((cur) => {
-          const ex = cur.find((x) => x.peerId === peer.id);
+          const id = getRemoteId(peer.id, rs);
+          const ex = cur.find((x) => x.id === id);
           if (ex) {
             if (!ex.stream.getTracks().includes(track.mediaStreamTrack)) {
               ex.stream.addTrack(track.mediaStreamTrack);
             }
             return [...cur];
           }
-          return [...cur, { peerId: peer.id, stream: rs }];
+          return [...cur, { id, peerId: peer.id, stream: rs }];
         });
       });
+      r.on("track-unsubscribed", ({ peer, track }) => {
+        setRemotes((cur) =>
+          cur.flatMap((entry) => {
+            if (entry.peerId !== peer.id || !entry.stream.getTracks().includes(track.mediaStreamTrack)) return [entry];
+            entry.stream.removeTrack(track.mediaStreamTrack);
+            return entry.stream.getTracks().length > 0 ? [entry] : [];
+          }),
+        );
+        });
 
       await r.publishCamera({ video: true, audio: true });
       setStatus("joined");
@@ -197,7 +212,16 @@ function EmbedRoom() {
 
   const tiles = [
     { id: "local", stream: localStreamRef.current, label: `${name || "Você"}`, local: true },
-    ...remotes.map((r) => ({ id: r.peerId, stream: r.stream, label: r.peerId, local: false })),
+    ...remotes.map((r, index, all) => {
+      const peerStreams = all.filter((entry) => entry.peerId === r.peerId);
+      const isExtraVideoStream = r.stream.getVideoTracks().length > 0 && peerStreams.findIndex((entry) => entry.id === r.id) > 0;
+      return {
+        id: r.id,
+        stream: r.stream,
+        label: isExtraVideoStream ? `Tela de ${r.peerId}` : r.peerId,
+        local: false,
+      };
+    }),
   ];
   const cols =
     tiles.length === 1
