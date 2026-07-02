@@ -64,7 +64,7 @@ function MeetingRoom() {
     a.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   });
-  const transcription = useTranscription(name || "Voce");
+  const transcription = useTranscription(room, name || "Voce");
   const speakerSources = [
     { id: "local", stream: localStreamRef.current },
     ...remotes.map((r) => ({ id: r.peerId, stream: r.stream })),
