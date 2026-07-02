@@ -32,8 +32,13 @@ export const Route = createFileRoute("/")({
 type Phase = "lobby" | "joining" | "in-call" | "ended" | "error";
 
 interface RemoteEntry {
+  id: string;
   peerId: string;
   stream: MediaStream;
+}
+
+function getRemoteEntryId(peerId: string, stream: MediaStream) {
+  return `${peerId}:${stream.id}`;
 }
 
 function getInitialRoomId() {
@@ -77,7 +82,7 @@ function MeetingRoom() {
   const aiOrganize = useAIOrganize();
   const speakerSources = [
     { id: "local", stream: localStreamRef.current },
-    ...remotes.map((r) => ({ id: r.peerId, stream: r.stream })),
+    ...remotes.map((r) => ({ id: r.id, stream: r.stream })),
   ];
   const activeSpeaker = useActiveSpeaker(speakerSources);
   const peerNames = usePresence(room, name);
@@ -147,16 +152,26 @@ function MeetingRoom() {
       });
       room.on("track-subscribed", ({ peer, track, stream: rs }) => {
         setRemotes((r) => {
-          const ex = r.find((x) => x.peerId === peer.id);
+          const entryId = getRemoteEntryId(peer.id, rs);
+          const ex = r.find((x) => x.id === entryId);
           if (ex) {
             if (!ex.stream.getTracks().includes(track.mediaStreamTrack)) {
               ex.stream.addTrack(track.mediaStreamTrack);
             }
             return [...r];
           }
-          return [...r, { peerId: peer.id, stream: rs }];
+          return [...r, { id: entryId, peerId: peer.id, stream: rs }];
         });
       });
+      room.on("track-unsubscribed", ({ peer, track }) => {
+        setRemotes((r) =>
+          r.flatMap((entry) => {
+            if (entry.peerId !== peer.id || !entry.stream.getTracks().includes(track.mediaStreamTrack)) return [entry];
+            entry.stream.removeTrack(track.mediaStreamTrack);
+            return entry.stream.getTracks().length > 0 ? [entry] : [];
+          }),
+        );
+        });
 
       // 3. publica as tracks do stream JÁ capturado (para que toggleMic/Cam funcione)
       for (const track of stream.getTracks()) {
@@ -305,7 +320,17 @@ function MeetingRoom() {
         ? [{ peerId: "screen", stream: screen.screenStream, label: "Sua tela", local: true }]
         : []),
     { peerId: "local", stream: localStreamRef.current, label: `${name} (você)`, local: true },
-    ...remotes.map((r) => ({ peerId: r.peerId, stream: r.stream, label: peerNames[r.peerId] || "Participante", local: false })),
+    ...remotes.map((r, index, all) => {
+      const name = peerNames[r.peerId] || "Participante";
+      const peerStreams = all.filter((entry) => entry.peerId === r.peerId);
+      const isExtraVideoStream = r.stream.getVideoTracks().length > 0 && peerStreams.findIndex((entry) => entry.id === r.id) > 0;
+      return {
+        peerId: r.id,
+        stream: r.stream,
+        label: isExtraVideoStream ? `Tela de ${name}` : name,
+        local: false,
+      };
+    }),
   ];
   const cols = tiles.length === 1 ? "grid-cols-1" : tiles.length === 2 ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-2 lg:grid-cols-3";
 
